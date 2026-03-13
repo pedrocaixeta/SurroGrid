@@ -129,6 +129,17 @@ For the precise keys and expectations, refer to:
 
 ## Environments / dependencies
 
+### System Requirements (Linux)
+
+Your Linux machine needs essential system packages to successfully build certain Python dependencies (such as `psycopg2` for PostgreSQL connectivity or other C-extensions). Install them via `apt` before creating your conda environments:
+
+```bash
+sudo apt-get update
+sudo apt-get install build-essential libpq-dev python3-dev
+```
+
+### Python Environments
+
 - GridExpand provides per-step conda environments (see each step’s `environment.yml` and optional `environment_HPC.yml`).
 - GridForecast does not ship a single canonical environment file; the Slurm scripts and training scripts may install packages at runtime.
 

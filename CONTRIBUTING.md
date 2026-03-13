@@ -7,8 +7,8 @@
 - [GitLab](https://gitlab.com/) as a public repository. Please create an account.
 - [Git](https://git-scm.com/) for version control. [Git How To](https://githowto.com/) and [Git Cheat Sheet](https://training.github.com/downloads/github-git-cheat-sheet.pdf) provide an introduction into working with Git.
 - Development Environment Setup:
-  - Clone the repository and set up a virtual environment as described in the `README.md`.
-  - Install all necessary dependencies using `pip install -r requirements.txt`.
+  - Clone the repository and set up a conda environment as described in the `README.md`.
+  - Install all necessary dependencies using the `environment.yml` provided for each step (e.g., `conda env create -f environment.yml`).
 
 ### Optional: Setting Up SSH for GitLab
 To simplify authentication, consider setting up SSH keys for GitLab. Follow [GitLab’s SSH key setup guide](https://docs.gitlab.com/ee/user/ssh.html) for instructions.
