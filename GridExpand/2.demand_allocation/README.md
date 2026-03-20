@@ -305,11 +305,10 @@ Code:
 
 ## How to run
 
-All commands below assume you are in the `gridalloc/` directory.
 
 ### 1) Create the environment
 
-On Linux/HPC, use:
+On Linux/HPC, in the 2.demand_allocation directory use:
 
 ```bash
 conda env create -f environment_HPC.yml
@@ -319,6 +318,7 @@ conda activate grid_alloc
 The `environment.yml` in this folder is a fully pinned export from a development machine and may include OS-specific artifacts; prefer `environment_HPC.yml` on clusters.
 
 ### 2) Run a single grid locally
+in the `gridalloc/` directory:
 
 ```bash
 python3 main.py <inputfile_id> --n_cpu 1
@@ -331,6 +331,7 @@ python3 main.py 0 --n_cpu 8
 ```
 
 ### 3) Run on HPC (SLURM)
+in the `gridalloc/` directory.
 
 Single job:
 
