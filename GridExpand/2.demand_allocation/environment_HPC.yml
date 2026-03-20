@@ -11,7 +11,7 @@ dependencies:
   # ───────── Scientific stack (generic names, no build pins) ─────────
   - numpy
   - scipy
-  - pandas
+  - pandas<3.0.0
   - h5py
   - numba
   - matplotlib
