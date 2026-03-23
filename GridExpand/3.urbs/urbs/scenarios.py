@@ -104,7 +104,9 @@ def extract_number(s, es):
     else:
         return None
 def insert_scenario(data, global_settings):
-    index = pd.MultiIndex.from_tuples([(2025, prop) for prop in global_settings.keys()], names=["support_timeframe", "property"])
+    from datetime import date
+    support_timeframe = date.today().year
+    index = pd.MultiIndex.from_tuples([(support_timeframe, prop) for prop in global_settings.keys()], names=["support_timeframe", "property"])
     # Create DataFrame
     df = pd.DataFrame({"value": list(global_settings.values())}, index=index) 
     data["global_prop"]=df
