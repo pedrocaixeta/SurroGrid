@@ -5,3 +5,6 @@ result/*
 !result/.gitkeep
 logs/*
 !logs/.gitkeep
+!logs/gurobi/
+logs/gurobi/*
+!logs/gurobi/.gitkeep
