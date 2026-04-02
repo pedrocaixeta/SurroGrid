@@ -30,6 +30,7 @@ class DataBase:
             "user": config.DB_USER,
             "password": config.DB_PASSWORD
         }
+        self.schema = "pylovo"  # Default schema to look for results
         self.engine = self._get_engine()
 
 
@@ -51,9 +52,8 @@ class DataBase:
 
     def show_contents(self):
         """ Show all database sheets """
-        schema_name = "public"  # Change this if needed
         with self.engine.connect() as conn:
-            result = conn.execute(text(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{schema_name}';"))
+            result = conn.execute(text(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{self.schema}';"))
             tables = [row[0] for row in result]
             print("Available tables:")
             print(tables)
@@ -62,9 +62,9 @@ class DataBase:
     def read_all_grid_identifiers(self):
         """ Retrieve all grids' (PLZ, kcid, bcid, regiostar) that were generated and stored in the grids database """
 
-        query = """
+        query = f"""
             SELECT plz, kcid, bcid
-            FROM public.grids;
+            FROM {self.schema}.grid_result;
         """
         # Execute the query with Pandas. This will only read data.
         df_generated_grids = pd.read_sql_query(query, self.engine)
@@ -76,9 +76,9 @@ class DataBase:
     def read_nonfiller_grid_identifiers(self):
         """ Retrieve all grids' (PLZ, kcid, bcid, location) that were generated and stored in the grids database """
 
-        query = """
+        query = f"""
             SELECT plz, kcid, bcid, ST_AsText(geom) as loc
-            FROM public.transformer_classified
+            FROM {self.schema}.transformer_classified_with_grid
             WHERE kmeans_clusters!=0;
         """
         # Execute the query with Pandas. This will only read data.
@@ -99,9 +99,9 @@ class DataBase:
                 net: pandapower grid topology (with lines, transformer, buses)
         """
 
-        query = text("""
+        query = text(f"""
             SELECT grid
-            FROM public.grids
+            FROM {self.schema}.grid_result
             WHERE (plz= :plz) AND (kcid= :kcid) AND (bcid= :bcid);
         """)
 
@@ -118,9 +118,9 @@ class DataBase:
     def read_trafo_pos(self, grid_specs):
         """ Read out position of transformer position for given grid from database """
 
-        query = text("""
+        query = text(f"""
             SELECT ST_AsText(geom) as loc
-            FROM public.transformer_positions
+            FROM {self.schema}.transformer_positions_with_grid
             WHERE (plz= :plz) AND (kcid= :kcid) AND (bcid= :bcid);
         """)
 
@@ -152,9 +152,9 @@ class DataBase:
         return trafo_pos
     
     def read_regional_stats(self, plz):
-        query = text("""
+        query = text(f"""
             SELECT plz, pop, area, name_city, pop_den, regio7
-            FROM public.municipal_register
+            FROM {self.schema}.municipal_register
             WHERE plz=:plz;
         """)
 
@@ -174,17 +174,17 @@ class DataBase:
         #     WHERE (b.plz= :plz) AND (b.kcid= :kcid) AND (b.bcid= :bcid);
         # """)
 
-        query = text(''' 
+        query = text(f''' 
             SELECT 
                 b.osm_id, b.vertice_id, b.type,
                 COALESCE(r.use, o.use) AS use,
                 b.houses_per_building, r.occupants,
                 COALESCE(r.free_walls, o.free_walls) AS free_walls,
                 b.floors, r.constructi, b.area, ST_AsText(b.center) AS center
-            FROM public.buildings_result b
-            LEFT JOIN public.res r 
+            FROM {self.schema}.buildings_result_with_grid b
+            LEFT JOIN {self.schema}.res r 
                 ON b.osm_id = r.osm_id
-            LEFT JOIN public.oth o 
+            LEFT JOIN {self.schema}.oth o 
                 ON b.osm_id = o.osm_id
             WHERE 
                 b.plz = :plz
