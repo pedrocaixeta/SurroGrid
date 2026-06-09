@@ -51,15 +51,37 @@ def get_pvgis_tmy_sarah3_dataframe(latitude, longitude):
         'database': 'SARAH3',  # Specify SARAH3 dataset
     }
     
-    # Make the request
+    # Make the request with retries
     print(f"Requesting TMY data from PVGIS (SARAH3) for coordinates ({latitude}, {longitude})...")
+    import time
+    max_retries = 5
+    response = None
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(base_url, params=params, timeout=30)
+            if response.status_code == 200:
+                break
+            elif response.status_code == 429:
+                sleep_time = 5 * (attempt + 1)
+                print(f"Rate limited by PVGIS (429). Sleeping for {sleep_time}s and retrying...")
+                time.sleep(sleep_time)
+            else:
+                print(f"Error: {response.status_code}")
+                print(response.text)
+                if attempt == max_retries - 1:
+                    return None
+                time.sleep(2)
+        except Exception as e:
+            if attempt == max_retries - 1:
+                print(f"Failed to fetch PVGIS data after {max_retries} attempts: {e}")
+                raise e
+            sleep_time = 2 ** attempt
+            print(f"Connection error or timeout ({e}). Retrying in {sleep_time}s...")
+            time.sleep(sleep_time)
+
     try:
-        response = requests.get(base_url, params=params)
-        
         # Check if the request was successful
-        if response.status_code != 200:
-            print(f"Error: {response.status_code}")
-            print(response.text)
+        if response is None or response.status_code != 200:
             return None
         
         # Parse the JSON response
@@ -158,8 +180,30 @@ def get_open_meteo_soil_temperature(lat, lon, selected_months):
             "hourly": "soil_temperature_100_to_255cm",
             "timezone": config.OPENMETEO_TIME_ZONE
         }
-        response = requests.get(config.OPENMETEO_URL, params=params)
-        
+        import time
+        max_retries = 5
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(config.OPENMETEO_URL, params=params, timeout=30)
+                if response.status_code == 200:
+                    break
+                elif response.status_code == 429:
+                    sleep_time = 5 * (attempt + 1)
+                    print(f"Rate limited by Open-Meteo (429). Sleeping for {sleep_time}s and retrying...")
+                    time.sleep(sleep_time)
+                else:
+                    if attempt == max_retries - 1:
+                        raise ValueError(f"HTTP error {response.status_code}: {response.text}")
+                    time.sleep(2)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    print(f"Failed to fetch Open-Meteo data after {max_retries} attempts: {e}")
+                    raise e
+                sleep_time = 2 ** attempt
+                print(f"Connection error or timeout ({e}). Retrying in {sleep_time}s...")
+                time.sleep(sleep_time)
+
         data = response.json()
         data_dict[month] = pd.DataFrame(data["hourly"])
 
