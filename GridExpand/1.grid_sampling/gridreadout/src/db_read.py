@@ -176,20 +176,20 @@ class DataBase:
 
         query = text(f''' 
             SELECT 
-                b.osm_id, b.vertice_id, b.type,
-                COALESCE(r.use, o.use) AS use,
-                b.houses_per_building, r.occupants,
-                COALESCE(r.free_walls, o.free_walls) AS free_walls,
-                b.floors, r.constructi, b.area, ST_AsText(b.center) AS center
-            FROM {self.schema}.buildings_result_with_grid b
-            LEFT JOIN {self.schema}.res r 
-                ON b.osm_id = r.osm_id
-            LEFT JOIN {self.schema}.oth o 
-                ON b.osm_id = o.osm_id
+                br.osm_id, br.vertice_id, br.type,
+                bdb.building_use AS use,
+                br.households_per_building AS houses_per_building,
+                bdb.occupants,
+                br.floors, 
+                bdb.construction_year AS constructi,
+                br.area, ST_AsText(br.center) AS center
+            FROM {self.schema}.buildings_result_with_grid br
+            LEFT JOIN basedata.buildings bdb
+                ON br.osm_id::integer = bdb.id
             WHERE 
-                b.plz = :plz
-                AND b.kcid = :kcid
-                AND b.bcid = :bcid;
+                br.plz = :plz
+                AND br.kcid = :kcid
+                AND br.bcid = :bcid;
         ''')
 
         with self.engine.connect() as conn:
