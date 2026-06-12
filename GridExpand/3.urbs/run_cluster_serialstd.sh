@@ -11,7 +11,7 @@
 #SBATCH --time=0-01:00:00
 #SBATCH --mem-per-cpu=6200M
 
-module load miniconda3/24.7.1
+module load miniforge3
 module load gurobi/12.00
 module list
 

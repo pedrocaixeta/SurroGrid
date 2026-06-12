@@ -12,7 +12,7 @@
 #SBATCH --mem-per-cpu=6200M
 
 
-module load miniconda3/24.7.1
+module load miniforge3
 module list
 
 eval "$(conda shell.bash hook)"
