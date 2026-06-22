@@ -176,16 +176,18 @@ class DataBase:
 
         query = text(f''' 
             SELECT 
-                br.osm_id, br.vertice_id, br.type,
-                bdb.building_use AS use,
-                br.households_per_building AS houses_per_building,
-                bdb.occupants,
-                br.floors, 
-                bdb.construction_year AS constructi,
-                br.area, ST_AsText(br.center) AS center
+                br.vertice_id, 
+                br.type,
+                br.height,
+                br.building_use AS use,
+                br.households AS houses_per_building,
+                br.occupants,
+                br.floor_number AS floors, 
+                br.construction_year AS constructi,
+                br.floor_area AS area, 
+                ST_AsText(br.centroid) AS center,
+                br.connection_point
             FROM {self.schema}.buildings_result_with_grid br
-            LEFT JOIN basedata.buildings bdb
-                ON br.osm_id::integer = bdb.id
             WHERE 
                 br.plz = :plz
                 AND br.kcid = :kcid
@@ -194,12 +196,18 @@ class DataBase:
 
         with self.engine.connect() as conn:
             df_buildings = pd.read_sql(query, conn, params={"plz":int(grid_specs["plz"]), "kcid":int(grid_specs["kcid"]), "bcid":int(grid_specs["bcid"])})
-
+        if df_buildings.empty:
+            raise ValueError(
+                f"No buildings found for PLZ={grid_specs['plz']}, KCID={grid_specs['kcid']}, BCID={grid_specs['bcid']}."
+            )
         ### Match bus to building
         df_id = pd.DataFrame()
         df_id["vertice_id"] = df_bus['name'].str.extract(r'^Consumer Nodebus (\d+)$')[0].dropna().astype(int)
         df_id = df_id.reset_index().rename(columns={"index":"bus"})
         df_buildings = df_buildings.merge(df_id, on='vertice_id', how="left")
+        if "connection_point" in df_buildings.columns: # Fallback to connection_point if bus is NaN
+            df_buildings["bus"] = df_buildings["bus"].fillna(df_buildings["connection_point"])
+            df_buildings.drop(columns=["connection_point"], inplace=True)
 
         ### Take bus to front and order by it
         cols = df_buildings.columns.tolist()
@@ -207,6 +215,51 @@ class DataBase:
         df_buildings = df_buildings[cols]
         df_buildings = df_buildings.sort_values(by='bus').reset_index(drop=True)
 
+        ### Verification of imported information and use of Fallback values if necessary
+        ## Floors
+        if "floors" in df_buildings.columns: 
+            # Ensure 'floors' is 'height'/3 if 'floors' is missing. If 'height' is also missing, then 'floors' falls back to 1
+            if "height" in df_buildings.columns:
+                average_floor_height = 3.0 # It is assumed that, in average, every floor (story) is 3m high. 
+                height_numeric = pd.to_numeric(df_buildings["height"], errors="coerce") # average height of a floor in meters. Source: German Building Energy Act (GEG § 25) / IWU building typologies????
+                estimated_floors = (height_numeric/ average_floor_height).round().fillna(1).clip(lower=1)
+                df_buildings["floors"] = df_buildings["floors"].fillna(estimated_floors).clip(lower=1)
+            else:
+                df_buildings["floors"] = df_buildings["floors"].fillna(1).clip(lower=1)
+        ## Households per building
+        if "houses_per_building" in df_buildings.columns and "use" in df_buildings.columns:
+            # Estimate houses per building if missing
+            is_res = df_buildings["use"] == "Residential"
+            if "type" in df_buildings.columns and "floors" in df_buildings.columns:
+                is_mfh_or_ab = df_buildings["type"].isin(["MFH", "AB"])
+                is_sfh_or_th = df_buildings["type"].isin(["SFH", "TH"])
+                
+                # Assume 2.0 households/floor for MFH/AB, and 1.0 for SFH/TH
+                estimated_houses = df_buildings["floors"] * 2.0
+                estimated_houses = estimated_houses.where(is_mfh_or_ab, 1.0)
+                
+                # For unknown types, if floors > 1 assume 2.0 per floor, else 1.0
+                unknown_type = ~(is_mfh_or_ab | is_sfh_or_th)
+                estimated_houses = estimated_houses.where(
+                    ~unknown_type, 
+                    (df_buildings["floors"] * 2.0).where(df_buildings["floors"] > 1, 1.0)
+                )
+                
+                df_buildings.loc[is_res, "houses_per_building"] = (
+                    df_buildings.loc[is_res, "houses_per_building"]
+                    .fillna(estimated_houses)
+                    .clip(lower=1)
+                )
+            else:
+                df_buildings.loc[is_res, "houses_per_building"] = (
+                    df_buildings.loc[is_res, "houses_per_building"].fillna(1).clip(lower=1)
+                )
+        ## Occupants
+        if "occupants" in df_buildings.columns:
+            # Ensures there are at least 1 occupant per building and assumes average of 2 occupants per household otherwise
+            fallback_occ = df_buildings["houses_per_building"] * 2
+            df_buildings["occupants"] = df_buildings["occupants"].fillna(fallback_occ)
+            df_buildings["occupants"] = df_buildings["occupants"].where(df_buildings["occupants"] >= 1, fallback_occ)
 
         ### Read out location from string
         def _get_loc(loc_string):
