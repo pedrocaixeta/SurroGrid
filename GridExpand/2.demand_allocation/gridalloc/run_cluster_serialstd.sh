@@ -8,7 +8,7 @@
 #SBATCH --partition=serial_long
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --time=0-06:00:00
+#SBATCH --time=0-09:00:00
 #SBATCH --mem-per-cpu=6200M
 
 module load miniforge3 # loads python into the cluster
@@ -32,3 +32,4 @@ wait
 ERR_FILE="logs/errors/${SLURM_JOB_ID}_error.log"
 if [ -f "$ERR_FILE" ] && [ ! -s "$ERR_FILE" ]; then
   rm "$ERR_FILE" 
+fi
