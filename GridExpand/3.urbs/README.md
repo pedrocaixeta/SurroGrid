@@ -159,7 +159,7 @@ Examples:
 
 The SLURM script:
 
-- loads `miniconda3` and `gurobi`
+- loads `miniforge3` and `gurobi`
 - activates `conda env urbs`
 - runs: `srun python3 run_urbs_cluster.py <INDEX> --n_cpu $SLURM_CPUS_PER_TASK`
 
