@@ -255,7 +255,7 @@ def get_mobility_demand(vehicles, weather):
         warnings.simplefilter("ignore", FutureWarning)
         # all_timeseries, all_batteries = _simulate_vehicles(vehicles, weather)
         max_retries = 3
-        for attempt in range(1, max_retries):
+        for attempt in range(1, max_retries+1):
             try:
                 all_timeseries, all_batteries = _simulate_vehicles(vehicles, weather)
                 break
