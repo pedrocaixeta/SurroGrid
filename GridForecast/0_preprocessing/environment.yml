@@ -1,0 +1,19 @@
+name: preprocessing
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - numpy<2
+  - pandas
+  - xarray
+  - networkx
+  - scikit-learn
+  - pandapower
+  - ipykernel
+  - jupyterlab
+  - pytables
+  - h5netcdf
+  - pip:
+    - h5py
