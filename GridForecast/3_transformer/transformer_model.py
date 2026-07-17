@@ -94,25 +94,25 @@ except Exception:  # pragma: no cover
 # Preprocessor
 # ============================================================
 class Preprocessor:
-        """Feature/target preprocessing and optional VMD augmentation for the Transformer.
+    """Feature/target preprocessing and optional VMD augmentation for the Transformer.
 
-        Responsibilities:
-            - Select base features (`X_BASE_COLS`) from raw `X`.
-            - Add engineered features:
-                    * zero indicators
-                    * log1p transforms
-                    * seasonal sin/cos terms from the hour index
-            - Optionally compute Variational Mode Decomposition (VMD) modes for selected
-                time series columns (configured via `VMD_COLS` / `VMD_K_MODES`).
-            - Scale X and y using `StandardScaler`.
+    Responsibilities:
+        - Select base features (`X_BASE_COLS`) from raw `X`.
+        - Add engineered features:
+                * zero indicators
+                * log1p transforms
+                * seasonal sin/cos terms from the hour index
+        - Optionally compute Variational Mode Decomposition (VMD) modes for selected
+            time series columns (configured via `VMD_COLS` / `VMD_K_MODES`).
+        - Scale X and y using `StandardScaler`.
 
-        Data assumptions:
-            - Input X/y are DataFrames indexed by MultiIndex with levels `batch` and `hour`.
-            - If dual-target mode is used, targets are interpreted as (P, Q).
-        """
+    Data assumptions:
+        - Input X/y are DataFrames indexed by MultiIndex with levels `batch` and `hour`.
+        - If dual-target mode is used, targets are interpreted as (P, Q).
+    """
 
     def __init__(self, data_cfg) -> None: 
-                """Create the preprocessor from the provided data configuration."""
+        """Create the preprocessor from the provided data configuration."""
         self.X_BASE_COLS        = data_cfg["X_BASE_COLS"]
         self.TARGET_COLS        = data_cfg["TARGET_COLS"]
         self.ZERO_BASE_FEATURES = data_cfg["ZERO_BASE_FEATURES"]
@@ -234,7 +234,7 @@ class Preprocessor:
 
         if vmd_approach == "read":
             try:
-                grid_vmd_signal = pd.read_hdf(f"/dss/dsshome1/05/ge96ton2/GridForecast/3_transformer/data/{filename}", key=f"data_{type}")
+                grid_vmd_signal = pd.read_hdf(f"/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/GridForecast/3_transformer/data/{filename}", key=f"data_{type}")
                 grid_vmd_signal.index = signals.index
                 return grid_vmd_signal
             except (FileNotFoundError, KeyError) as e:
@@ -256,7 +256,7 @@ class Preprocessor:
         grid_vmd_signal.index = signals.index
 
         if vmd_approach == "write":
-            grid_vmd_signal.to_hdf(f"/dss/dsshome1/05/ge96ton2/GridForecast/3_transformer/data/{filename}", key=f"data_{type}", mode="a")
+            grid_vmd_signal.to_hdf(f"/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/GridForecast/3_transformer/data/{filename}", key=f"data_{type}", mode="a")
 
         return grid_vmd_signal
 
@@ -693,16 +693,16 @@ class AlphaPeakLoss(nn.Module):
 # Trainer
 # ============================================================
 class TransformerTrainer:
-        """Train/evaluate a `TransformerForecastModel` from a config dictionary.
+    """Train/evaluate a `TransformerForecastModel` from a config dictionary.
 
-        The trainer owns:
-            - preprocessing and dataset windowing
-            - PyTorch model + optimizer/scheduler
-            - metric evaluation via `EvaluationMetrics`
-            - optional Ray Tune reporting
+    The trainer owns:
+        - preprocessing and dataset windowing
+        - PyTorch model + optimizer/scheduler
+        - metric evaluation via `EvaluationMetrics`
+        - optional Ray Tune reporting
 
-        Training is performed one epoch at a time via `step()` (Ray-friendly).
-        """
+    Training is performed one epoch at a time via `step()` (Ray-friendly).
+    """
     def __init__(self, config: Dict[str, Any]):
         """Initialize trainer from configuration (and optionally auto-load data)."""
         # Merge dict into config dataclass
@@ -2651,7 +2651,7 @@ def build_tune_search_space(tune):
 
         # Data pipeline
         '_data': {
-            'hdf_data_path': '/dss/dsshome1/05/ge96ton2/GridForecast/0_preprocessing/Data/ts_train.h5',
+            'hdf_data_path': '../0_preprocessing/Data/ts_train.h5',
             'key_X': 'X',
             'key_y': 'y',
             'train_grids': 'all',
