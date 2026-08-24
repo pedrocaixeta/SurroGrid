@@ -14,8 +14,9 @@ def _get_dhw_demand_ghd(df_buildings):
     df_normalized_lps_ghd = pd.read_csv(config.DHW_GHD_PATH, skiprows=1, header=[0])*1000
 
     # Apply function and create a new DataFrame
-    data_dict_ghd = {row["bus"]: _get_single_dhw_timeseries_ghd(row['type'], row["area"], row["floors"], df_normalized_lps_ghd) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
-
+    data_dict_ghd = {row["bus"]: _get_single_dhw_timeseries_ghd(row['type'], row["area"]*0.75, 1, df_normalized_lps_ghd) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
+    #                                                                                   #0,75 is the use area factor
+    
     # Convert to DataFrame
     df_dhw_demand = pd.DataFrame(data_dict_ghd).reset_index(drop=True)
     df_dhw_demand.columns = pd.MultiIndex.from_product([df_dhw_demand.columns, ["water_heat"]])

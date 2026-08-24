@@ -204,7 +204,7 @@ def _get_single_building_elec_timeseries_res(yearly_demand_list, df_normalized_l
     return total_ts
 
 def _get_single_building_elec_timeseries_ghd(type, area, floors, df_normalized_lps_ghd):
-    return df_normalized_lps_ghd[type]*area*floors
+    return df_normalized_lps_ghd[type]*area*floors #Insert Use area conversion factor here
 
 
 ##############################################################
@@ -223,7 +223,8 @@ def get_elec_demand(df_buildings):
 
     # Apply function and create a new DataFrame
     data_dict_res = {row["bus"]: _get_single_building_elec_timeseries_res(row['demand_tot_list'], df_normalized_lps_res, lps_res_total_demand) for idx, row in df_buildings.iterrows() if row["use"]=="Residential"}
-    data_dict_ghd = {row["bus"]: _get_single_building_elec_timeseries_ghd(row['type'], row["area"], row["floors"], df_normalized_lps_ghd) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
+    data_dict_ghd = {row["bus"]: _get_single_building_elec_timeseries_ghd(row['type'], row["area"]*0.75, row["floors"], df_normalized_lps_ghd) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
+    #                                                                                             #0.75 is the use area factor
 
     # Convert to DataFrame
     df_elec_demand_res = pd.DataFrame(data_dict_res).reset_index(drop=True)

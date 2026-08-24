@@ -242,8 +242,8 @@ class Datahandler:
                                 name="ResidentialBuildingTabula",
                                 year_of_construction=building["buildingFeatures"]["year"],
                                 number_of_floors=building["buildingFeatures"]["floors"],
-                                height_of_floors=3.125,
-                                net_leased_area=building["buildingFeatures"]["area"],
+                                height_of_floors=3.125, #Possible immprovement: pass height_of_floors/number_of_floors from input data
+                                net_leased_area=building["buildingFeatures"]["area"]*0.75, #0,75 is the use_area factor. This is the value used by the infdb, as explained by Beneharo on 19.08.2026 via Teams
                                 construction_type=retrofit_level)
             
 
