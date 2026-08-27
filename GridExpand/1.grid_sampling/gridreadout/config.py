@@ -35,7 +35,7 @@ class Config:
     #----------------- Paths/Dataset Readout ----------------------#
     #--------------------------------------------------------------#
     # Important paths
-    STORAGE_DIR = "results"                # Directory in which to store results
+    STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/result1.gridsamping__input2/"                # Directory in which to store results
     PYLOVO_COORD_FORMAT = "EPSG:3035"
     TARGET_COORD_FORMAT = "EPSG:4326"
 

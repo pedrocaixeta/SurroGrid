@@ -6,9 +6,9 @@ class Config:
     #----------------- Paths/Dataset Readout ----------------------#
     #--------------------------------------------------------------#
     ##### Important data paths #####
-    DATA_GRID_DIR = "data/grids"           # Directory from which to read the pylovo grid input data
+    DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/result1.gridsamping__input2/"           # Directory from which to read the pylovo grid input data
     DATA_STAT_DIR = "data/statistics"      # Directory from which to read data for computing demands
-    STORAGE_DIR = "results"                # Directory in which to store resulting urbs input files
+    STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/2.Demand_Allocated/"                # Directory in which to store resulting urbs input files
 
     #--------------------------------------------------------------#
     #-------------- Weather Data API Connections ------------------#
@@ -172,7 +172,7 @@ class Config:
     PV_PF_MIN = np.nan
     # PV_PF_MIN = 0.95          # tan(phi_min), powerfactor for reactive power
     
-    # HP + booster constants
+    # HP + booster (heating rod) constants
     HP_AIR_INST_CAP = 0           # kW power capacity installed already
     HP_AIR_CAP_UP = 2000          # kW arbitrary upper capacity
     HP_AIR_INV_COST_FIX = 6600    # €/installation decision

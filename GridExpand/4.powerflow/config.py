@@ -1,7 +1,9 @@
 class Config():
     ### Data directories
-    DATA_DIR = "Input/"
-    STORAGE_DIR = "Output/"
+    #DATA_DIR = "Input/"
+    #STORAGE_DIR = "Output/"
+    DATA_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/3.Post_Urbs/"
+    STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/4.Power_Flown/"
 
     ### Power factors
     PF_PV_MIN = 0.95    # Photovoltaics: -arccos(PF_MIN) <= tan(phi)=Q/P <= arccos(PF_MIN), source: VDE-AR-N 4105
