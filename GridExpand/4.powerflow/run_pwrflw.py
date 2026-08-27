@@ -20,8 +20,14 @@ import src.powerflow as pwrflw
 import argparse
 import os
 from src.resource_report import resource_report
+from config import config
 
 if __name__ == "__main__":
+    import time
+    t_start = time.perf_counter()
+    ot_start = os.times()
+    t_start_str = time.strftime("%Y-%m-%d %H:%M:%S")
+
     ##### Read args + Obtain relevant input_files #####:
     parser = argparse.ArgumentParser(description="Low voltage grid DER allocation.")
     parser.add_argument("inputfile_id", help="Input file name (no path)")
@@ -29,7 +35,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # list all .h5 files in your directory
-    all_entries = os.listdir("Input/")
+    all_entries = os.listdir(config.DATA_DIR)
     h5_files = [fname for fname in all_entries if fname.endswith(".h5")]
     # find file with correct id prefix
     input_id_str = str(args.inputfile_id)
@@ -80,4 +86,84 @@ if __name__ == "__main__":
         SF.save_df(vm_post, "/pwrflw/output/post/vm")
         SF.save_df(line_loads_post, "/pwrflw/output/post/line_loads")
 
+    # Rename output file to append '_pwrflw' suffix
+    file_name, file_extension = os.path.splitext(SF.output_path)
+    new_output_path = f"{file_name}_pwrflw{file_extension}"
+    if os.path.exists(new_output_path):
+        os.remove(new_output_path)
+    os.rename(SF.output_path, new_output_path)
+    print(f"Renamed output file to: {os.path.basename(new_output_path)}")
+
+    # Collect performance metrics (optional, should not block execution)
+    try:
+        t_end = time.perf_counter()
+        ot_end = os.times()
+        t_end_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        wall_sec = max(0.0, t_end - t_start)
+        
+        user_sec = max(0.0, ot_end[0] - ot_start[0])
+        system_sec = max(0.0, ot_end[1] - ot_start[1])
+        user_sec += max(0.0, ot_end[2] - ot_start[2])
+        system_sec += max(0.0, ot_end[3] - ot_start[3])
+        cpu_sec = user_sec + system_sec
+        
+        try:
+            import resource
+            import platform
+            ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            peak_rss = int(ru) * 1024 if platform.system() == "Linux" else int(ru)
+        except Exception:
+            peak_rss = 0
+            
+        cpu_model = "Unknown"
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if "model name" in line:
+                        cpu_model = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            import platform
+            cpu_model = platform.processor() or "Unknown"
+            
+        import socket
+        slurm_job_id = os.environ.get("SLURM_JOB_ID", "N/A")
+        slurm_partition = os.environ.get("SLURM_JOB_PARTITION", "N/A")
+        slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK", os.environ.get("SLURM_CPUS_ON_NODE", "1"))
+        slurm_mem = os.environ.get("SLURM_MEM_PER_CPU", "N/A")
+        slurm_cluster = os.environ.get("SLURM_CLUSTER_NAME", "N/A")
+        hostname = socket.gethostname()
+        
+        new_entry = {
+            "step": "powerflow",
+            "timestamp_start": t_start_str,
+            "timestamp_end": t_end_str,
+            "wall_seconds": wall_sec,
+            "cpu_seconds": cpu_sec,
+            "peak_rss_bytes": peak_rss,
+            "cpu_model": cpu_model,
+            "hostname": hostname,
+            "slurm_job_id": slurm_job_id,
+            "slurm_partition": slurm_partition,
+            "slurm_cpus_allocated": slurm_cpus,
+            "slurm_mem_per_cpu": slurm_mem,
+            "slurm_cluster": slurm_cluster
+        }
+        
+        import pandas as pd
+        df_new = pd.DataFrame([new_entry])
+        
+        try:
+            df_existing = pd.read_hdf(new_output_path, key="performance")
+            df_existing = df_existing[df_existing["step"] != "powerflow"]
+            df_all = pd.concat([df_existing, df_new], ignore_index=True)
+        except Exception:
+            df_all = df_new
+            
+        with pd.HDFStore(new_output_path, mode="a") as store:
+            store.put("performance", df_all, format="fixed")
+    except Exception as e:
+        print(f"Warning: Failed to write performance metadata: {e}")
+
     print("Done!")
+    os._exit(0)
