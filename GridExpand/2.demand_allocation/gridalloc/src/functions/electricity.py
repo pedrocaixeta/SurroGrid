@@ -223,8 +223,17 @@ def get_elec_demand(df_buildings):
 
     # Apply function and create a new DataFrame
     data_dict_res = {row["bus"]: _get_single_building_elec_timeseries_res(row['demand_tot_list'], df_normalized_lps_res, lps_res_total_demand) for idx, row in df_buildings.iterrows() if row["use"]=="Residential"}
-    data_dict_ghd = {row["bus"]: _get_single_building_elec_timeseries_ghd(row['type'], row["area"]*0.75, row["floors"], df_normalized_lps_ghd) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
-    #                                                                                             #0.75 is the use area factor
+    data_dict_ghd = {row["bus"]: _get_single_building_elec_timeseries_ghd(
+        type = row['type'], 
+        area = row["area"]*0.75, #0.75 is the use area factor
+        floors = 1 if row["use"] == "Commercial" else row["floors"], # We consider the commercial buildings to have only 1 floor. Reason: 
+        #                                                     Mixed-use buildings (e.g., ground-floor commercial with apartments above) 
+        #                                                     are labeled as 'Commercial', and the residents of these buildings are 
+        #                                                     already allocated to Residential buildings in the simulation.
+        #                                                     Since residential electricity demand is computed based on occupants, these residents'
+        #                                                     demand is already accounted for. Using all floors here would double-count it.
+        df_normalized_lps_ghd = df_normalized_lps_ghd
+        ) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
 
     # Convert to DataFrame
     df_elec_demand_res = pd.DataFrame(data_dict_res).reset_index(drop=True)

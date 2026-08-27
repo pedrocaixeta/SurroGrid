@@ -13,9 +13,19 @@ def _get_single_dhw_timeseries_ghd(type, area, floors, df_normalized_lps_ghd):
 def _get_dhw_demand_ghd(df_buildings):
     df_normalized_lps_ghd = pd.read_csv(config.DHW_GHD_PATH, skiprows=1, header=[0])*1000
 
-    # Apply function and create a new DataFrame
-    data_dict_ghd = {row["bus"]: _get_single_dhw_timeseries_ghd(row['type'], row["area"]*0.75, 1, df_normalized_lps_ghd) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
-    #                                                                                   #0,75 is the use area factor
+    data_dict_ghd = {row["bus"]: _get_single_dhw_timeseries_ghd(
+        type = row['type'], 
+        area = row["area"]*0.75, #0.75 is the use area factor
+        floors = 1 if row["use"] == "Commercial" else row["floors"], # We consider the commercial buildings to have only 1 floor. Reason: 
+        #                                                     Mixed-use buildings (e.g., ground-floor commercial with apartments above) 
+        #                                                     are labeled as 'Commercial', and the residents of these buildings are 
+        #                                                     already allocated to Residential buildings in the simulation.
+        #                                                     Since residential DHW demand is computed based on occupants, these residents'
+        #                                                     demand is already accounted for. Using all floors here would double-count it.
+        df_normalized_lps_ghd = df_normalized_lps_ghd
+        ) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
+
+
     
     # Convert to DataFrame
     df_dhw_demand = pd.DataFrame(data_dict_ghd).reset_index(drop=True)
