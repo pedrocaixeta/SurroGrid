@@ -71,7 +71,11 @@ def run_single_pf(grid, new_load):
     df_load_updated = df_load_indexed.reset_index()
 
     grid.load = df_load_updated
-    pp.runpp(grid, algorithm="bfsw", max_iteration=50, tolerance_mva=1e-6)
+    try:
+        pp.runpp(grid, algorithm="bfsw", init = "flat", max_iteration=50, tolerance_mva=1e-6)
+    except pp.LoadflowNotConverged:
+        pp.diagnostic(grid, report_style='detailed')
+        raise
     return grid
 
 
