@@ -94,7 +94,27 @@ def run_full_pf(grid, df_demand):
         reshaped_load[["p_mw", "q_mvar"]] = reshaped_load[["p_mw", "q_mvar"]]/1000
         
         ### Run powerflow
-        grid_res = run_single_pf(grid, reshaped_load)
+        try:
+            grid_res = run_single_pf(grid, reshaped_load)
+        except Exception as e:
+            import sys
+            total_p = reshaped_load["p_mw"].sum()
+            total_q = reshaped_load["q_mvar"].sum()
+            max_p_load = reshaped_load["p_mw"].max()
+            max_q_load = reshaped_load["q_mvar"].max()
+            print(f"\n=========================================", file=sys.stderr)
+            print(f"[POWER FLOW FAILURE] Timestep index: {i}", file=sys.stderr)
+            print(f"Total active power load (P): {total_p:.6f} MW", file=sys.stderr)
+            print(f"Total reactive power load (Q): {total_q:.6f} MVar", file=sys.stderr)
+            print(f"Maximum single active load: {max_p_load:.6f} MW", file=sys.stderr)
+            print(f"Maximum single reactive load: {max_q_load:.6f} MVar", file=sys.stderr)
+            
+            top_loads = reshaped_load.sort_values(by="p_mw", ascending=False).head(5)
+            print("\nTop 5 largest active power loads at this timestep:", file=sys.stderr)
+            print(top_loads.to_string(index=False), file=sys.stderr)
+            print(f"=========================================\n", file=sys.stderr)
+            sys.stderr.flush()
+            raise e
 
         ### Save
         ext_imports_list.append(grid_res.res_ext_grid)                          # Transformer import of p,q
