@@ -254,12 +254,19 @@ class DataBase:
                 df_buildings.loc[is_res, "houses_per_building"] = (
                     df_buildings.loc[is_res, "houses_per_building"].fillna(1).clip(lower=1)
                 )
+       
         ## Occupants
-        if "occupants" in df_buildings.columns:
-            # Ensures there are at least 1 occupant per building and assumes average of 2 occupants per household otherwise
+        if "occupants" in df_buildings.columns and "use" in df_buildings.columns:
+            is_res = df_buildings["use"] == "Residential"
+            # Non-residential buildings should not have occupants. In case they have, delete them.
+            df_buildings.loc[~is_res, "occupants"] = None
+            # Ensures there are at least 1 occupant per building and assumes average of 2 occupants per household otherwise (only for Residential)
             fallback_occ = df_buildings["houses_per_building"] * 2
-            df_buildings["occupants"] = df_buildings["occupants"].fillna(fallback_occ)
-            df_buildings["occupants"] = df_buildings["occupants"].where(df_buildings["occupants"] >= 1, fallback_occ)
+            df_buildings.loc[is_res, "occupants"] = df_buildings.loc[is_res, "occupants"].fillna(fallback_occ)
+            df_buildings.loc[is_res, "occupants"] = df_buildings.loc[is_res, "occupants"].where(
+                df_buildings.loc[is_res, "occupants"] >= 1, fallback_occ
+            ) # Be Aware: SurroGrid does not use the number of occupants, but the number of households and samples occupants for each household
+
 
         ### Read out location from string
         def _get_loc(loc_string):
