@@ -18,15 +18,20 @@
 import os
 import io
 import json
+import warnings
 from pathlib import Path
 import h5py
 import pandas as pd
+from pandas.errors import PerformanceWarning
+
+# Ignore harmless PerformanceWarnings when saving DataFrames with MultiIndex columns to HDF5
+warnings.filterwarnings('ignore', category=PerformanceWarning)
 
 # Disable HDF5 file locking to avoid errors on network mounts or HPC filesystems
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 # Folder containing intermediate allocated-demand grid H5 files
-INPUT_FOLDER = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/2.Demand_Allocated/"
+INPUT_FOLDER = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/3.Post_Urbs/"
 
 # Peak demand thresholds in kilowatts (kW)
 COMMERCIAL_PUBLIC_THRESHOLD_KW = 100.0
@@ -184,6 +189,37 @@ def process_hdf5_file(file_path):
         print(f"  [Error] Failed to write changes to network in {file_path.name}: {e}")
         return None
 
+    # -----------------------------------------------------------------
+    # Step 5: Zero out demands for disconnected buildings (Security layer)
+    # -----------------------------------------------------------------
+    try:
+        # Zero out pre-URBS demands in /urbs_in/demand
+        cols_to_zero = [col for col in df_demand.columns if str(col[0]) in buses_to_disconnect]
+        if cols_to_zero:
+            df_demand.loc[:, cols_to_zero] = 0.0
+            with h5py.File(str(file_path), 'a') as f:
+                if '/urbs_in/demand' in f:
+                    del f['/urbs_in/demand']
+            df_demand.to_hdf(str(file_path), key='/urbs_in/demand', mode='a')
+            
+        # Zero out post-URBS (MILP) demands in /urbs_out/MILP/tau_pro if they exist
+        has_tau = False
+        with h5py.File(str(file_path), 'r') as f:
+            has_tau = 'urbs_out/MILP/tau_pro' in f or '/urbs_out/MILP/tau_pro' in f
+            
+        if has_tau:
+            df_tau = pd.read_hdf(str(file_path), key='/urbs_out/MILP/tau_pro')
+            mask = df_tau.index.get_level_values('sit').astype(str).isin(buses_to_disconnect)
+            if mask.any():
+                df_tau.loc[mask] = 0.0
+                with h5py.File(str(file_path), 'a') as f:
+                    if '/urbs_out/MILP/tau_pro' in f:
+                        del f['/urbs_out/MILP/tau_pro']
+                df_tau.to_hdf(str(file_path), key='/urbs_out/MILP/tau_pro', mode='a')
+                
+    except Exception as e:
+        print(f"  [Error] Failed to zero out demands in {file_path.name}: {e}")
+
     # Calculate remaining active buildings
     remaining_count = total_buildings - matching_buildings_count
     remaining_percent = (remaining_count / total_buildings) * 100.0
@@ -212,6 +248,7 @@ def main():
     print("=" * 80)
 
     processed_indices = []
+    total_disconnected_all = 0
 
     for file_path in h5_files:
         grid_idx = extract_index_from_filename(file_path.name)
@@ -223,12 +260,14 @@ def main():
         stats = process_hdf5_file(file_path)
         
         if stats is not None:
+            total_disconnected_all += stats['matching_found']
             print(f"{grid_idx:<12} | {stats['total_buildings']:<12} | {stats['matching_found']:<14} | {stats['remaining_percent']:>10.2f}%")
         else:
             print(f"{grid_idx:<12} | {'Failed':<12} | {'-':<14} | {'-':<12}")
 
     print("=" * 80)
     print(f"Successfully processed {len(processed_indices)} grid files.")
+    print(f"Total buildings disconnected across all grids: {total_disconnected_all}")
     print(f"Processed grid indexes list: {processed_indices}")
 
 
