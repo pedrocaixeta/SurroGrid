@@ -52,16 +52,16 @@ if __name__ == "__main__":
     print(f"Running input file {settings['file']} (ID {args.inputfile_id}) with {settings['n_cpu']} CPUs!")
 
     # Save file handler
-    SF = svgrd.SaveFile(settings["file"])
+    SF = svgrd.SaveFile(settings["file"]) #object of the SaveFile class, which is a copy from the .h5 file ouputted by 3.urbs
 
 
     ##### Obtaining Power Demands #####
     # Read-out and preprocess demand before and after DER expansion
     df_pre_demand, df_post_demand = dmnds.obtain_demand(SF)
 
-    # Save to be retrieved later by ML model
-    SF.save_df(df_pre_demand, "/pwrflw/input/demand_pre")
-    SF.save_df(df_post_demand, "/pwrflw/input/demand_post")
+    # Demand Time Series for each building, used as input in the for Power Flow Computation
+    SF.save_df(df_pre_demand, "/pwrflw/input/demand_pre") #pre-urbs
+    SF.save_df(df_post_demand, "/pwrflw/input/demand_post") #post-urbs
 
 
     ##### Powerflow #####

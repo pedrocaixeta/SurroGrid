@@ -70,9 +70,9 @@ def run_single_pf(grid, new_load):
     # 3. If you need to restore 'bus' as a column rather than the index:
     df_load_updated = df_load_indexed.reset_index()
 
-    grid.load = df_load_updated
+    grid.load = df_load_updated # Updates the grid's loads: Writes the loads from 2.demand_allocation (bzw. from 3.urbs) in the grid
     try:
-        pp.runpp(grid, algorithm="bfsw", init = "flat", max_iteration=50, tolerance_mva=1e-6)
+        pp.runpp(grid, algorithm="bfsw", init = "flat", max_iteration=50, tolerance_mva=1e-6) #has pandapower run the powerflow
     except pp.LoadflowNotConverged:
         pp.diagnostic(grid, report_style='detailed')
         raise
