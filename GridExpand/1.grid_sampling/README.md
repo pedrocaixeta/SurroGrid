@@ -46,13 +46,13 @@ DB_USER=...
 DB_PASSWORD=...
 ```
 
-The notebooks expect the pylovo DB schema to provide at least the tables queried in `src/db_read.py`:
+The notebooks expect the pylovo DB schema (configured via `INFDB_SOURCE_SCHEMA`) to provide at least the tables queried in `gridreadout/src/db_read.py`:
 
-- `public.grids` (grid JSON)
-- `public.transformer_classified` (grid identifiers + transformer geometry)
-- `public.transformer_positions` (transformer point geometry)
-- `public.buildings_result`, `public.res`, `public.oth` (building attributes)
-- `public.municipal_register` (regional stats)
+- `{schema}.grid_result` (grid JSON and generated grid identifiers)
+- `{schema}.transformer_classified_with_grid` (grid identifiers + transformer geometry)
+- `{schema}.transformer_positions_with_grid` (transformer point geometry)
+- `{schema}.buildings_result_with_grid` (building attributes)
+- `{schema}.municipal_register` (regional stats)
 
 If you do not have DB access, see **“Skip DB / use your own .h5 grids”** below.
 
