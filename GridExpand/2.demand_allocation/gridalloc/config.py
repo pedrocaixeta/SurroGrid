@@ -6,9 +6,9 @@ class Config:
     #----------------- Paths/Dataset Readout ----------------------#
     #--------------------------------------------------------------#
     ##### Important data paths #####
-    DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/result1.gridsamping__input2/"           # Directory from which to read the pylovo grid input data
+    DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/1.Grid_Sampled/"           # Directory from which to read the pylovo grid input data
     DATA_STAT_DIR = "data/statistics"      # Directory from which to read data for computing demands
-    STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/2.Demand_Allocated/"                # Directory in which to store resulting urbs input files
+    STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/2.Demand_Allocated/"                # Directory in which to store resulting urbs input files
 
     #--------------------------------------------------------------#
     #-------------- Weather Data API Connections ------------------#
