@@ -38,7 +38,7 @@ if __name__ == "__main__":
     all_entries = os.listdir(config.DATA_DIR)
     h5_files = [fname for fname in all_entries if fname.endswith(".h5")]
     # find file with correct id prefix
-    input_id_str = str(args.inputfile_id)
+    input_id_str = str(args.inputfile_id).zfill(4)
     matched_files = [fname for fname in h5_files if fname.split('_', 1)[0] == input_id_str]
     input_file = matched_files[0]
 
