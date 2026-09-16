@@ -18,10 +18,7 @@ Outputs:
     site/bus and power component (`electricity` and `electricity-reactive`).
 - Writes `pwrflw/urbs_out/MILP/reactive` to the output `.h5` for traceability.
 
-Important conventions:
-
-- Reactive power is derived from fixed power factors in `config.py`.
-- Inductive/lagging demand is represented as negative Q.
+Note: Reactive power is derived from fixed power factors in `config.py`.
 """
 
 from config import config
@@ -31,9 +28,15 @@ import numpy as np
 
 def _process_pre_demands(df_pre_demand):
     ### Pre-urbs raw household (reactive) electrical demand
+
+    # Retrieve the a filtered version from /urbs_in/demand table, with only the 'electricity' commodity
     df_raw_demand_elec = df_pre_demand.loc[:, df_pre_demand.columns.get_level_values(1) == 'electricity']
+    
     df_raw_demand_react = df_raw_demand_elec.copy()*np.tan(np.arccos(config.PF_ELC))
+
+    # Rename the column MultiIndex from (bus_id, 'electricity') to (bus_id, 'electricity-reactive')
     df_raw_demand_react.columns = df_raw_demand_react.columns.map(lambda x: (x[0], "electricity-reactive"))
+    
     return df_raw_demand_elec, df_raw_demand_react
 
 def _extract_relevant_demands(df_net_demand):
@@ -130,7 +133,7 @@ def _process_post_demands(df_urbs_demand, df_pre_demand_react):
     return df_post_demand_elec, df_post_demand_react, df_react_save
 
 def obtain_demand(SF):
-    # Read-out demands:
+    # returns the tables from "urbs_in/demand", "urbs_out/MILP/tau_pro"
     df_raw_demand, df_urbs_demand = SF.get_input_demands()
 
     # Obtain pre-urbs raw household demands as imports
