@@ -112,23 +112,29 @@ def _get_occupancy_distribution(prob:dict, n_hh:int, n_occ:int)->list:
     Returns: 
     - list of number of occupants in each household of a building 
     """
-    if pd.isna(n_hh) or pd.isna(n_occ): 
+    if pd.isna(n_hh) or n_hh <= 0: 
         return []
-    else:
-        # To check whether occupancy can even be fulfilled by statistics:
-        min_dist_member = min(prob.keys())          # minimum household size in statistics
-        max_dist_member = max(prob.keys())          # maximum household size in statistics
+        
+    # If n_occ is NaN or 0, but we have households, we simply sample n_hh times from the distribution
+    if pd.isna(n_occ) or n_occ <= 0:
+        sizes = list(prob.keys())
+        probs = list(prob.values())
+        return list(np.random.choice(sizes, size=int(n_hh), p=probs))
 
-        if max_dist_member*n_hh < n_occ:            # statistics do not allow for filling up building, simply assing max occupants to each household 
-            return [max_dist_member]*n_hh
-        elif min_dist_member*n_hh > n_occ:          # fewer occupants in building than covered by stats, simply assign min occupants to each household
-            return [min_dist_member]*n_hh
-        else:
-            allowed_x = prob.keys()
-            try:
-                return _sample_sequence_with_tolerance(n_hh, n_occ, prob, allowed_x, tol=0.95)
-            except: 
-                return [_closest_allowed(allowed_x, n_occ/n_hh)]*n_hh
+    # To check whether occupancy can even be fulfilled by statistics:
+    min_dist_member = min(prob.keys())          # minimum household size in statistics
+    max_dist_member = max(prob.keys())          # maximum household size in statistics
+
+    if max_dist_member*n_hh < n_occ:            # statistics do not allow for filling up building, simply assing max occupants to each household 
+        return [max_dist_member]*int(n_hh)
+    elif min_dist_member*n_hh > n_occ:          # fewer occupants in building than covered by stats, simply assign min occupants to each household
+        return [min_dist_member]*int(n_hh)
+    else:
+        allowed_x = prob.keys()
+        try:
+            return _sample_sequence_with_tolerance(n_hh, n_occ, prob, allowed_x, tol=0.95)
+        except: 
+            return [_closest_allowed(allowed_x, n_occ/n_hh)]*int(n_hh)
 
 def _assign_household_occupancy(df_buildings):
     if len(df_buildings)==0:
@@ -137,7 +143,10 @@ def _assign_household_occupancy(df_buildings):
     else:
         df_prob = config.HH_SIZE_DISTRIBUTION
         prob = dict(zip(df_prob["size"], df_prob["probability"]))          # retrieve polynomial encoding household size probabilities
-        df_buildings['occ_list'] = df_buildings.apply(lambda row: _get_occupancy_distribution(prob, row['houses_per_building'], row['occupants']), axis=1)
+        df_buildings['occ_list'] = df_buildings.apply(lambda row: _get_occupancy_distribution(prob, row.get('houses_per_building'), row.get('occupants')), axis=1)
+        
+        # Overwrite the 'occupants' column so the sampled values are written back to h5 raw_data
+        df_buildings['occupants'] = df_buildings['occ_list'].apply(lambda x: sum(x) if isinstance(x, list) else 0)
         return df_buildings
     
 
@@ -200,9 +209,6 @@ def _get_single_building_elec_timeseries_res(yearly_demand_list, df_normalized_l
         ts_list.append(scaled_series)
 
     # Combine all scaled timeseries into a DataFrame: each column corresponds to a step.
-    if not ts_list:
-        return pd.Series(0, index=df_normalized_lps.index)
-        
     df_ts = pd.concat(ts_list, axis=1)
     total_ts = df_ts.sum(axis=1)
     return total_ts
