@@ -197,10 +197,10 @@ def generate_heat_demands(df_buildings, df_elec_demand, df_elec_demand_res, df_e
 
     # Map demands back to bus and sum parts from the same building
     df_space_heat.columns = [id_to_bus[int(float(col))] for col in df_space_heat.columns]
-    df_space_heat = df_space_heat.groupby(level=0, axis=1).sum()
+    df_space_heat = df_space_heat.T.groupby(level=0).sum().T
     
     df_dhw.columns = [id_to_bus[int(float(col))] for col in df_dhw.columns]
-    df_dhw = df_dhw.groupby(level=0, axis=1).sum()
+    df_dhw = df_dhw.T.groupby(level=0).sum().T
 
     # Postprocess demands
     df_dhw.columns = pd.MultiIndex.from_product([df_dhw.columns, ["water_heat"]])
