@@ -395,7 +395,7 @@ class Users:
                     #                                                                  annual_demand=self.annual_el_demand_per_flat[j])
 
                     # self.gains = self.gains + temp_obj.generate_gain_profile_elec_given()
-            self.gains = self.generate_gain_profile_elec_given((elecDemand[building["buildingFeatures"]["bus"]]*1000).to_numpy().flatten())
+            self.gains = self.generate_gain_profile_elec_given((elecDemand[building["buildingFeatures"]["id"]]*1000).to_numpy().flatten())
 
 
     def generate_gain_profile_elec_given(self,elecDemand_i):

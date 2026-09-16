@@ -175,17 +175,18 @@ def _assign_total_elec_demands(df_buildings):
 ##############################################################
 ################## Sampling building use #####################
 ##############################################################
-def _get_use_type(dist, type, use):
-    if use == "Residential":  # Use pre-assigned type
-        return type
-    if use == "Public":       # Sample from distribution
+def _get_use_type(dist, nonresidential_use, nonresidential_floor_area):
+    if nonresidential_floor_area == 0:  
+        return pd.NA
+    if nonresidential_use == "Public":       # Sample from distribution
         return np.random.choice(dist["type"], p=dist['public_prob'])
-    if use == "Commercial":   # Sample from distribution
+    if nonresidential_use == "Commercial":   # Sample from distribution
         return np.random.choice(dist["type"], p=dist['commercial_prob'])
+    return pd.NA
 
 def _assign_use_type(df_buildings):
     df_type_dist = config.TYPE_GHD_DISTRIBUTION
-    df_buildings["type"] = df_buildings.apply(lambda row: _get_use_type(df_type_dist, row['type'], row["use"]), axis=1)
+    df_buildings["ghd_type"] = df_buildings.apply(lambda row: _get_use_type(df_type_dist, row.get('nonresidential_use'), row.get('nonresidential_floor_area')), axis=1)
     return df_buildings
 
 def _get_single_building_elec_timeseries_res(yearly_demand_list, df_normalized_lps, lps_total_demands):
@@ -203,8 +204,8 @@ def _get_single_building_elec_timeseries_res(yearly_demand_list, df_normalized_l
     total_ts = df_ts.sum(axis=1)
     return total_ts
 
-def _get_single_building_elec_timeseries_ghd(type, area, floors, df_normalized_lps_ghd):
-    return df_normalized_lps_ghd[type]*area*floors #Insert Use area conversion factor here
+def _get_single_building_elec_timeseries_ghd(type, area, df_normalized_lps_ghd):
+    return df_normalized_lps_ghd[type]*area
 
 
 ##############################################################
@@ -222,32 +223,33 @@ def get_elec_demand(df_buildings):
     df_normalized_lps_ghd = pd.read_csv(config.ELEC_GHD_PATH, skiprows=1, header=[0])
 
     # Apply function and create a new DataFrame
-    data_dict_res = {row["bus"]: _get_single_building_elec_timeseries_res(row['demand_tot_list'], df_normalized_lps_res, lps_res_total_demand) for idx, row in df_buildings.iterrows() if row["use"]=="Residential"}
+    data_dict_res = {row["bus"]: _get_single_building_elec_timeseries_res(
+        row['demand_tot_list'], df_normalized_lps_res, lps_res_total_demand) for idx, row in df_buildings.iterrows() if row.get("residential_floor_area", 0) > 0}
+    
     data_dict_ghd = {row["bus"]: _get_single_building_elec_timeseries_ghd(
-        type = row['type'], 
-        area = row["area"]*0.75, #0.75 is the use area factor
-        floors = 1 if row["use"] == "Commercial" else row["floors"], # We consider the commercial buildings to have only 1 floor. Reason: 
-        #                                                     Mixed-use buildings (e.g., ground-floor commercial with apartments above) 
-        #                                                     are labeled as 'Commercial', and the residents of these buildings are 
-        #                                                     already allocated to Residential buildings in the simulation.
-        #                                                     Since residential electricity demand is computed based on occupants, these residents'
-        #                                                     demand is already accounted for. Using all floors here would double-count it.
+        type = row['ghd_type'], 
+        area = row["nonresidential_floor_area"]*0.75, # 0.75 is the use_area factor
         df_normalized_lps_ghd = df_normalized_lps_ghd
-        ) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
+    ) for idx, row in df_buildings.iterrows() if row.get("nonresidential_floor_area", 0) > 0}
 
     # Convert to DataFrame
-    df_elec_demand_res = pd.DataFrame(data_dict_res).reset_index(drop=True)
-    df_elec_demand_ghd = pd.DataFrame(data_dict_ghd).reset_index(drop=True)
-    df_elec_demand = pd.concat([df_elec_demand_res, df_elec_demand_ghd], axis=1)
-    df_elec_demand.columns = pd.MultiIndex.from_product([df_elec_demand.columns, ["electricity"]])
+    all_buses = df_buildings["bus"].tolist()
+    df_elec_demand_res = pd.DataFrame(data_dict_res).reindex(columns=all_buses, fill_value=0).reset_index(drop=True)
+    df_elec_demand_ghd = pd.DataFrame(data_dict_ghd).reindex(columns=all_buses, fill_value=0).reset_index(drop=True)
+    
+    # Combine demands (Mixed buildings will have columns in both dataframes, the final value is their sum)
+    df_elec_demand = df_elec_demand_res.add(df_elec_demand_ghd, fill_value=0)
+    
+    # Ensure they all share the full time index (in case one was completely empty, which results in 0 rows)
+    df_elec_demand_res = df_elec_demand_res.reindex(index=df_elec_demand.index, fill_value=0)
+    df_elec_demand_ghd = df_elec_demand_ghd.reindex(index=df_elec_demand.index, fill_value=0)
 
-    # Assign correct total demand to non-res
-    non_res_mask = df_buildings["use"] != "Residential"
-    df_buildings.loc[non_res_mask, "demand_tot_list"] = df_buildings.loc[non_res_mask, "bus"].map(
-        lambda bus: df_elec_demand[bus].sum().tolist()
-    )
+    # Adds the commodity index to the columns
+    df_elec_demand.columns = pd.MultiIndex.from_tuples([(col, "electricity") for col in df_elec_demand.columns])
+    df_elec_demand_res.columns = pd.MultiIndex.from_tuples([(col, "electricity") for col in df_elec_demand_res.columns])
+    df_elec_demand_ghd.columns = pd.MultiIndex.from_tuples([(col, "electricity") for col in df_elec_demand_ghd.columns])
 
-    return df_buildings, df_elec_demand
+    return df_buildings, df_elec_demand, df_elec_demand_res, df_elec_demand_ghd
 
 # def get_elec_react_demand(df_elec_demand):
 #     conversion_factor = math.tan(math.acos(config.ELEC_REACT_PF))

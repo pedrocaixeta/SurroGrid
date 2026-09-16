@@ -298,10 +298,6 @@ class Datahandler:
         saveUserProfiles: bool, optional
             True for saving calculated user profiles in workspace (Only taken into account if calcUserProfile is True).
             The default is True.
-
-        Returns
-        -------
-        None.
         """
         dhw_res_profiles = {}
         space_heat_profiles = {}
@@ -332,9 +328,9 @@ class Datahandler:
                                                 time_resolution=self.time["timeResolution"]
                                                 )
 
-            dhw_res_profiles[building["buildingFeatures"]["bus"]] = building["user"].dhw
-            space_heat_profiles[building["buildingFeatures"]["bus"]] = building["user"].heat
-            gain_profiles[building["buildingFeatures"]["bus"]] = building["user"].gains
+            dhw_res_profiles[building["buildingFeatures"]["id"]] = building["user"].dhw
+            space_heat_profiles[building["buildingFeatures"]["id"]] = building["user"].heat
+            gain_profiles[building["buildingFeatures"]["id"]] = building["user"].gains
 
         df_dhw_res = pd.DataFrame(dhw_res_profiles)/1000
         df_space_heat = pd.DataFrame(space_heat_profiles)/1000

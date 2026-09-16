@@ -77,7 +77,7 @@ class Grid:
         self.df_buildings = elc.sample_statistics(self.df_buildings)
 
         # Now obtain electricity demands
-        self.df_buildings, self.df_demand_elec = elc.get_elec_demand(self.df_buildings)
+        self.df_buildings, self.df_demand_elec, self.df_demand_elec_res, self.df_demand_elec_ghd = elc.get_elec_demand(self.df_buildings)
         # self.df_demand_elec_react = elc.get_elec_react_demand(self.df_demand_elec)
 
         # Include daylight saving time effect (electricity timeseries are all UTC+1 only, thus include summer time demand shift):
@@ -91,15 +91,19 @@ class Grid:
         # Add daylight saving dummy shift to input data:
         df_wth_input = self._add_input_data_daylight_saving_shift(self.df_weather_raw)
         df_elec_input = self._add_input_data_daylight_saving_shift(self.df_demand_elec)
+        df_elec_res_input = self._add_input_data_daylight_saving_shift(self.df_demand_elec_res)
+        df_elec_ghd_input = self._add_input_data_daylight_saving_shift(self.df_demand_elec_ghd)
         self.df_demand_elec = self._add_output_data_daylight_saving_shift(self.df_demand_elec)  # Now we can also adjust elec output data
+        self.df_demand_elec_res = self._add_output_data_daylight_saving_shift(self.df_demand_elec_res)
+        self.df_demand_elec_ghd = self._add_output_data_daylight_saving_shift(self.df_demand_elec_ghd)
 
         # Now, obtain heat demands
         if self.settings["parallel"]:
             # Run parallel jobs
-            print(f"Generating heat demands for {len(self.df_buildings)} building(s) with {sum(self.df_buildings["houses_per_building"])} flat(s)...")
+            print(f"Generating heat demands for {len(self.df_buildings)} building(s) with {sum(self.df_buildings['houses_per_building'])} flat(s)...")
             building_subsets = self.partition_df_by_cpu(self.df_buildings, self.settings["n_cpu"], "houses_per_building")
             col_subsets = [[(col, "electricity") for col in subset["bus"].values] for subset in building_subsets]
-            job_args = [(subset.reset_index(drop=True), df_elec_input[col_subsets[i]], [np.array(df_wth_input[col]) for col in ["dni", "dhi", "temp_air"]], self.plz)
+            job_args = [(subset.reset_index(drop=True), df_elec_input[col_subsets[i]], df_elec_res_input[col_subsets[i]], df_elec_ghd_input[col_subsets[i]], [np.array(df_wth_input[col]) for col in ["dni", "dhi", "temp_air"]], self.plz)
                          for i, subset in enumerate(building_subsets)]
             with Pool() as pool:
                 results = pool.starmap(heat.generate_heat_demands, job_args)
@@ -108,7 +112,9 @@ class Grid:
             self.df_demand_heat_water = pd.concat([results[i][1] for i in range(len(results))], axis=1).sort_index(axis=1, level=[0])
         else:
             self.df_demand_heat_space, self.df_demand_heat_water = heat.generate_heat_demands(
-                            self.df_buildings, df_elec_input, [np.array(df_wth_input[col]) for col in ["dni", "dhi", "temp_air"]], self.plz)
+                self.df_buildings, df_elec_input, df_elec_res_input, df_elec_ghd_input, 
+                [np.array(df_wth_input[col]) for col in ["dni", "dhi", "temp_air"]], self.plz
+            )
 
         # Account for daylight saving in output:
         self.df_demand_heat_space = self._add_output_data_daylight_saving_shift(self.df_demand_heat_space)

@@ -7,23 +7,17 @@ import warnings
 ##############################################################
 ################## Obtaining GHD + HP COP ####################
 ##############################################################
-def _get_single_dhw_timeseries_ghd(type, area, floors, df_normalized_lps_ghd):
-    return df_normalized_lps_ghd[type]*area*floors
+def _get_single_dhw_timeseries_ghd(type, area, df_normalized_lps_ghd):
+    return df_normalized_lps_ghd[type]*area
 
 def _get_dhw_demand_ghd(df_buildings):
     df_normalized_lps_ghd = pd.read_csv(config.DHW_GHD_PATH, skiprows=1, header=[0])*1000
 
     data_dict_ghd = {row["bus"]: _get_single_dhw_timeseries_ghd(
-        type = row['type'], 
-        area = row["area"]*0.75, #0.75 is the use area factor
-        floors = 1 if row["use"] == "Commercial" else row["floors"], # We consider the commercial buildings to have only 1 floor. Reason: 
-        #                                                     Mixed-use buildings (e.g., ground-floor commercial with apartments above) 
-        #                                                     are labeled as 'Commercial', and the residents of these buildings are 
-        #                                                     already allocated to Residential buildings in the simulation.
-        #                                                     Since residential DHW demand is computed based on occupants, these residents'
-        #                                                     demand is already accounted for. Using all floors here would double-count it.
+        type = row['ghd_type'], 
+        area = row["nonresidential_floor_area"]*0.75, # 0.75 is the net_use are factor
         df_normalized_lps_ghd = df_normalized_lps_ghd
-        ) for idx, row in df_buildings.iterrows() if row["use"]!="Residential"}
+    ) for idx, row in df_buildings.iterrows() if row.get("nonresidential_floor_area", 0) > 0}
 
 
     
@@ -102,18 +96,89 @@ def sample_statistics(df_buildings):
 
     return df_buildings
 
-def generate_heat_demands(df_buildings, df_elec_demand, weather_data, zip):
+def generate_heat_demands(df_buildings, df_elec_demand, df_elec_demand_res, df_elec_demand_ghd, weather_data, zip):
     # Domestic hot water only for non-residential buildings
     df_dhw_ghd = _get_dhw_demand_ghd(df_buildings)
 
     # Setting up input for heat load generator
-    scenario = df_buildings.copy()
-    scenario = scenario[["bus", "type", "constructi", "area", "floors", "houses_per_building","occ_list"]]
-    scenario.reset_index(inplace=True)
-    scenario.rename(inplace=True, columns={"index":"id","type":"building", "houses_per_building":"nb_flat", "occ_list":"nb_occ", "constructi":"year"})
-    scenario["NWG"] = scenario["building"].apply(lambda x: 1 if x not in ["SFH","MFH","TH","AB"] else 0)
+    scenario_rows = []
+    
+    new_id = 0
+    id_to_bus = {}
+    split_elec_dict = {}
+    
+    for idx, row in df_buildings.iterrows():
+        bus = row["bus"]
+        bus_col = (bus, "electricity")
+        b_type = row.get("type", "")
+        
+        nonres_area = pd.to_numeric(row.get("nonresidential_floor_area", 0), errors='coerce')
+        res_area = pd.to_numeric(row.get("residential_floor_area", 0), errors='coerce')
+        if pd.isna(nonres_area): nonres_area = 0
+        if pd.isna(res_area): res_area = 0
+        
+        is_mixed = (res_area > 0) and (nonres_area > 0)
+        
+        if is_mixed:
+            # --- Mixed Building: Split into two components ---
+            
+            # 1. Create the residential component
+            row_res = row.copy()
+            # Retain standard residential type if applicable, else default to Apartment Block (AB)
+            row_res["type"] = b_type if b_type in ["SFH", "MFH", "TH", "AB"] else "AB"
+            row_res["area"] = res_area # Use the exact residential floor area provided
+            row_res["NWG"] = 0 # 0 = Residential space heating profile
+            row_res["new_id"] = new_id
+            id_to_bus[new_id] = bus
+            if bus_col in df_elec_demand_res.columns:
+                split_elec_dict[new_id] = df_elec_demand_res[bus_col]
+            scenario_rows.append(row_res)
+            new_id += 1
+            
+            # 2. Create the non-residential (commercial) component
+            row_nonres = row.copy()
+            row_nonres["type"] = "Commercial"
+            row_nonres["area"] = nonres_area # Use the exact non-residential floor area provided
+            row_nonres["NWG"] = 1 # 1 = Non-Residential space heating profile
+            row_nonres["new_id"] = new_id
+            id_to_bus[new_id] = bus
+            if bus_col in df_elec_demand_ghd.columns:
+                split_elec_dict[new_id] = df_elec_demand_ghd[bus_col]
+            scenario_rows.append(row_nonres)
+            new_id += 1
+            
+        else:
+            # --- Standard single-use building ---
+            row_reg = row.copy()
+            
+            # Convert footprint area to total floor area for standard buildings
+            row_reg["area"] = row.get("area") * (row.get("floors"))
+            
+            # Assign correct heating profile type (NWG) based on standard building types
+            if b_type in ["SFH", "MFH", "TH", "AB"]: 
+                row_reg["NWG"] = 0 # Residential
+                if bus_col in df_elec_demand_res.columns:
+                    split_elec_dict[new_id] = df_elec_demand_res[bus_col]
+                elif bus_col in df_elec_demand.columns:
+                    split_elec_dict[new_id] = df_elec_demand[bus_col]
+            else:
+                row_reg["NWG"] = 1 # Non-Residential
+                if bus_col in df_elec_demand_ghd.columns:
+                    split_elec_dict[new_id] = df_elec_demand_ghd[bus_col]
+                elif bus_col in df_elec_demand.columns:
+                    split_elec_dict[new_id] = df_elec_demand[bus_col]
+                
+            row_reg["new_id"] = new_id
+            id_to_bus[new_id] = bus
+            scenario_rows.append(row_reg)
+            new_id += 1
+
+    scenario = pd.DataFrame(scenario_rows)
+    df_elec_demand_split = pd.DataFrame(split_elec_dict)
+    scenario = scenario[["new_id", "bus", "type", "constructi", "area", "floors", "houses_per_building", "occ_list", "NWG"]]
+    
+    scenario.rename(inplace=True, columns={"new_id":"id", "type":"building", "houses_per_building":"nb_flat", "occ_list":"nb_occ", "constructi":"year"})
     scenario["year"] = scenario["year"].str.extract(r'(\d+)(?!.*\d)').astype(int)
-    scenario["area"] = scenario["area"] * scenario["floors"]
     scenario["nb_occ"] = scenario["nb_occ"].apply(lambda x: [int(round(y,0)) for y in x])
     scenario["retrofit"] = 0
 
@@ -128,12 +193,22 @@ def generate_heat_demands(df_buildings, df_elec_demand, weather_data, zip):
         warnings.simplefilter("ignore", FutureWarning)
         # warnings.simplefilter("ignore", pd.errors.SettingWithCopyWarning)
         heat_data.generateBuildings()
-        df_space_heat, df_dhw, df_gains = heat_data.generateDemands(df_elec_demand)
+        df_space_heat, df_dhw, df_gains = heat_data.generateDemands(df_elec_demand_split)
+
+    # Map demands back to bus and sum parts from the same building
+    df_space_heat.columns = [id_to_bus[int(float(col))] for col in df_space_heat.columns]
+    df_space_heat = df_space_heat.groupby(level=0, axis=1).sum()
+    
+    df_dhw.columns = [id_to_bus[int(float(col))] for col in df_dhw.columns]
+    df_dhw = df_dhw.groupby(level=0, axis=1).sum()
 
     # Postprocess demands
     df_dhw.columns = pd.MultiIndex.from_product([df_dhw.columns, ["water_heat"]])
     df_space_heat.columns = pd.MultiIndex.from_product([df_space_heat.columns, ["space_heat"]])
-    df_dhw[df_dhw_ghd.columns] = df_dhw_ghd  # Combine with nonres building results for DHW
+    
+    # Combine with nonres building results for DHW (Mixed buildings will be summed)
+    if not df_dhw_ghd.empty:
+        df_dhw = df_dhw.add(df_dhw_ghd, fill_value=0)
 
     return df_space_heat, df_dhw
 

@@ -195,7 +195,7 @@ All outputs are written into a copy of the input file under `gridalloc/results/`
 
 - `roofs`: list of roof sections per building; each element is `(cap_kW, tilt_deg, azimuth_deg)`
 - `occ_list`: list of household sizes per flat (residential)
-- `demand_tot_list`: list of sampled annual electricity demands per flat (residential), or derived totals (non-res)
+- `demand_tot_list`: list of sampled annual electricity demands per flat (for buildings with residential part),)
 - `heating_type`: sampled as `radiator` or `floor` (used for COP)
 - `cars_by_flat`, `n_cars_tot`, `car_dict`: mobility sampling results
 
