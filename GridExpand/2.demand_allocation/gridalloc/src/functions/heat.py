@@ -174,6 +174,7 @@ def generate_heat_demands(df_buildings, df_elec_demand, df_elec_demand_res, df_e
             new_id += 1
 
     scenario = pd.DataFrame(scenario_rows)
+    scenario.reset_index(drop=True, inplace=True)
     df_elec_demand_split = pd.DataFrame(split_elec_dict)
     scenario = scenario[["new_id", "bus", "type", "constructi", "area", "height", "floors", "houses_per_building", "occ_list", "NWG"]]
     
