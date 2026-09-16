@@ -200,6 +200,9 @@ def _get_single_building_elec_timeseries_res(yearly_demand_list, df_normalized_l
         ts_list.append(scaled_series)
 
     # Combine all scaled timeseries into a DataFrame: each column corresponds to a step.
+    if not ts_list:
+        return pd.Series(0, index=df_normalized_lps.index)
+        
     df_ts = pd.concat(ts_list, axis=1)
     total_ts = df_ts.sum(axis=1)
     return total_ts
