@@ -26,7 +26,10 @@ if __name__ == '__main__':
         # find file with correct id prefix
         input_id_str = str(args.inputfile_id)
         matched_files = [fname for fname in h5_files if fname.split('_', 1)[0] == input_id_str]
-        inputfile = matched_files[0]
+        if matched_files:
+            inputfile = matched_files[0]
+        else:
+            inputfile = sorted(h5_files)[int(args.inputfile_id)]
 
         ####### Run Settings: #######
         settings = {
