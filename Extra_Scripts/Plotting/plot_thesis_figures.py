@@ -534,8 +534,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--out_dir",
-        default="//dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/tests/Negative_Q/",
-        help="Directory to save the plotted image files (default: '/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_RUN/tests/Negative_Q/')."
+        default="/dss/dsshome1/05/go49cer2/SurroGrid_3rdRUN/Extra_Scripts/Plotting/output",
+        help="Directory to save the plotted image files (default: '/dss/dsshome1/05/go49cer2/SurroGrid_3rdRUN/Extra_Scripts/Plotting/output')."
     )
     args = parser.parse_args()
 
