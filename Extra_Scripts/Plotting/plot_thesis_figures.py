@@ -52,6 +52,25 @@ def get_pwrflw_files(pwrflw_dir):
     return h5_files
 
 
+def get_unique_output_path(filepath):
+    """
+    Checks if a file already exists at the given filepath.
+    If it exists, appends an appendix counter (_1, _2, ...) before
+    the file extension to prevent overwriting existing files.
+    """
+    if not os.path.exists(filepath):
+        return filepath
+    
+    base, ext = os.path.splitext(filepath)
+    counter = 1
+    new_filepath = f"{base}_{counter}{ext}"
+    while os.path.exists(new_filepath):
+        counter += 1
+        new_filepath = f"{base}_{counter}{ext}"
+    print(f"Notice: '{os.path.basename(filepath)}' already exists. Saving with appendix: '{os.path.basename(new_filepath)}'")
+    return new_filepath
+
+
 def plot_figure_4_2_a(pwrflw_dir, out_dir, preurbs, file_suffix, color, case_label, title=None):
     """
     Generates Figure 4.2 a): Scatter plot of relative peak load change vs grid building number.
@@ -141,6 +160,7 @@ def plot_figure_4_2_a(pwrflw_dir, out_dir, preurbs, file_suffix, color, case_lab
     
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'figure_4_2_a{file_suffix}.png')
+    out_path = get_unique_output_path(out_path)
     plt.savefig(out_path, dpi=300)
     plt.close()
     print(f"Successfully saved Figure 4.2 a) ({case_label}) to: {out_path}")
@@ -246,6 +266,7 @@ def plot_figure_4_2_b(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_la
     # Save the plot
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'figure_4_2_b{file_suffix}.png')
+    out_path = get_unique_output_path(out_path)
     plt.savefig(out_path, dpi=300)
     plt.close()
     print(f"Successfully saved Figure 4.2 b) ({case_label}) to: {out_path}")
@@ -360,6 +381,7 @@ def plot_figure_4_2_b_filtered(pwrflw_dir, out_dir, preurbs, file_suffix, colors
     # Save the plot
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'figure_4_2_b_filtered{file_suffix}.png')
+    out_path = get_unique_output_path(out_path)
     plt.savefig(out_path, dpi=300)
     plt.close()
     print(f"Successfully saved Figure 4.2 b) Filtered ({case_label}) to: {out_path}")
@@ -520,6 +542,7 @@ def plot_figure_4_1(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_labe
     # Save the plot
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'figure_4_1{file_suffix}.png')
+    out_path = get_unique_output_path(out_path)
     plt.savefig(out_path, dpi=300)
     plt.close()
     print(f"Successfully saved Figure 4.1 ({case_label}) to: {out_path}")
@@ -570,7 +593,7 @@ if __name__ == "__main__":
             "title": "Pre-Urbs (PedroC)",
             "pwrflw_dir": "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/4.Power_Flown/",
             "preurbs": True,
-            "file_suffix": "_pre_PedroC_NegativeQ",
+            "file_suffix": "_pre_PedroC",
             "color_4_2_a": "crimson",
             "color_4_2_b": ("crimson", "khaki"),
             "color_4_1": ("chocolate", "deeppink", "forestgreen")
@@ -581,7 +604,7 @@ if __name__ == "__main__":
             "title": "Post-Urbs (PedroC)",
             "pwrflw_dir": "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/4.Power_Flown/",
             "preurbs": False,
-            "file_suffix": "_post_PedroC_NegativeQ",
+            "file_suffix": "_post_PedroC",
             "color_4_2_a": "indigo",
             "color_4_2_b": ("indigo", "gold"),
             "color_4_1": ("saddlebrown", "magenta", "dodgerblue")
