@@ -242,7 +242,7 @@ class Datahandler:
                                 name="ResidentialBuildingTabula",
                                 year_of_construction=building["buildingFeatures"]["year"],
                                 number_of_floors=building["buildingFeatures"]["floors"],
-                                height_of_floors=building["buildingFeatures"]["height"]/building["buildingFeatures"]["floors"],
+                                height_of_floors=3.125, # building["buildingFeatures"]["height"]/building["buildingFeatures"]["floors"], # This would be a possible improvement, to dynamically retrieve the average floor height of each building individually, instead of "hardcodedly" assumin 3,125m for every building
                                 net_leased_area=building["buildingFeatures"]["area"]*0.75, #0,75 is the use_area factor. This is the value used by the infdb, as explained by Beneharo on 19.08.2026 via Teams
                                 construction_type=retrofit_level)
             
