@@ -37,9 +37,18 @@ if __name__ == "__main__":
     # list all .h5 files in your directory
     all_entries = os.listdir(config.DATA_DIR)
     h5_files = [fname for fname in all_entries if fname.endswith(".h5")]
-    # find file with correct id prefix
-    input_id_str = str(args.inputfile_id).zfill(4)
-    matched_files = [fname for fname in h5_files if fname.split('_', 1)[0] == input_id_str]
+    # find file with correct id prefix for both index formats: the original 0_ or 0000_ beginning from Pedro's 3rd run
+    try:
+        val = int(args.inputfile_id)
+        valid_prefixes = (str(val), f"{val:04d}")
+    except ValueError:
+        valid_prefixes = (str(args.inputfile_id), str(args.inputfile_id).zfill(4))
+        
+    matched_files = [fname for fname in h5_files if fname.split('_', 1)[0] in valid_prefixes]
+    
+    if not matched_files:
+        raise IndexError(f"No grid file found matching ID {args.inputfile_id}. Found 0 matches.")
+        
     input_file = matched_files[0]
 
 
