@@ -176,7 +176,7 @@ def generate_heat_demands(df_buildings, df_elec_demand, df_elec_demand_res, df_e
     scenario = pd.DataFrame(scenario_rows)
     scenario.reset_index(drop=True, inplace=True)
     df_elec_demand_split = pd.DataFrame(split_elec_dict)
-    scenario = scenario[["new_id", "bus", "type", "constructi", "area", "height", "floors", "houses_per_building", "occ_list", "NWG"]]
+    scenario = scenario[["new_id", "bus", "type", "constructi", "area", "floors", "houses_per_building", "occ_list", "NWG"]]
     
     scenario.rename(inplace=True, columns={"new_id":"id", "type":"building", "houses_per_building":"nb_flat", "occ_list":"nb_occ", "constructi":"year"})
     scenario["year"] = scenario["year"].str.extract(r'(\d+)(?!.*\d)').astype(int)
