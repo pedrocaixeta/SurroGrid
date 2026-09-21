@@ -23,15 +23,18 @@ class Grid:
         self.df_buildings, self.df_region, self.df_weather_raw = self.SF.get_input_data()
 
         # Check for backwards compatibility with older database versions that do not contain the mixed building columns.
-        if "residential_floor_area" not in self.df_buildings.columns and "nonresidential_floor_area" not in self.df_buildings.columns:
-            self.df_buildings["residential_floor_area"] = 0
-            self.df_buildings["nonresidential_floor_area"] = 0
+        if "residential_floor_area" not in self.df_buildings.columns and "nonresidential_floor_area" not in self.df_buildings.columns and "nonresidential_use" not in self.df_buildings.columns: # Which is the case for older datasets (Elias', 1st and second batches)
+            self.df_buildings["residential_floor_area"] = 0.0
+            self.df_buildings["nonresidential_floor_area"] = 0.0
+            self.df_buildings["nonresidential_use"] = pd.NA
             
             # If the building use is 'Residential', assign the entire area to residential_floor_area
             self.df_buildings.loc[self.df_buildings["use"] == "Residential", "residential_floor_area"] = self.df_buildings["area"]
             
             # If the building use is 'Commercial' or 'Public', assign the entire area to nonresidential_floor_area
-            self.df_buildings.loc[self.df_buildings["use"].isin(["Commercial", "Public"]), "nonresidential_floor_area"] = self.df_buildings["area"]
+            mask_ghd = self.df_buildings["use"].isin(["Commercial", "Public"])
+            self.df_buildings.loc[mask_ghd, "nonresidential_floor_area"] = self.df_buildings["area"]
+            self.df_buildings.loc[mask_ghd, "nonresidential_use"] = self.df_buildings["use"]
 
         self.region = int(self.df_region["regio7"])        # regiostar region used for mobility statistics
         self.plz = str(self.df_region["plz"]).zfill(5)     # plz of assumed grid position (not of pylovo grid used as representation)
