@@ -113,7 +113,7 @@ def _get_occupancy_distribution(prob:dict, n_hh:int, n_occ:int)->list:
     - list of number of occupants in each household of a building 
     """
     if pd.isna(n_hh) or n_hh <= 0: 
-        return []
+        raise ValueError(f"Residential building has an invalid number of households: {n_hh}")
         
     # If n_occ is NaN or 0, but we have households, we simply sample n_hh times from the distribution
     if pd.isna(n_occ) or n_occ <= 0:
@@ -143,10 +143,12 @@ def _assign_household_occupancy(df_buildings):
     else:
         df_prob = config.HH_SIZE_DISTRIBUTION
         prob = dict(zip(df_prob["size"], df_prob["probability"]))          # retrieve polynomial encoding household size probabilities
-        df_buildings['occ_list'] = df_buildings.apply(lambda row: _get_occupancy_distribution(prob, row.get('houses_per_building'), row.get('occupants')), axis=1)
+        df_buildings['occ_list'] = df_buildings.apply(
+            lambda row: _get_occupancy_distribution(prob, row.get('houses_per_building'), row.get('occupants')) 
+            if row.get("residential_floor_area", 0) > 0 else [], #Only Residential builsings should get an occupants list. They'll get BEVs otherwise
+            axis=1
+        )
         
-        # Overwrite the 'occupants' column so the sampled values are written back to h5 raw_data
-        df_buildings['occupants'] = df_buildings['occ_list'].apply(lambda x: sum(x) if isinstance(x, list) else 0)
         return df_buildings
     
 
