@@ -282,6 +282,9 @@ Top-level (this step):
 - `gridalloc/config.py` – all constants and file paths; instantiates `config = Config()`
 - `gridalloc/run_cluster_serialstd.sh` – SLURM job script (single grid per job)
 - `gridalloc/start_batch_jobs_serialstd.sh` – submits multiple SLURM jobs over an index range
+- `disconnect_MV_buildings/` – post-processing to disconnect buildings that belong to the MV grid
+  - `disconnect_MV_buildings.py` – scans demand-allocated `.h5` files and disconnects loads exceeding MV thresholds
+  - `run_disconnect_MV_buildings.sh` – SLURM batch submission script for HPC runs
 
 Data:
 
@@ -344,6 +347,49 @@ Submit a range (inclusive):
 ```bash
 bash start_batch_jobs_serialstd.sh 0 24
 ```
+
+### 4) Post-processing: Disconnect MV buildings from LV grids
+
+Once `2.demand_allocation` has successfully generated the demand time series, you **must run the post-processing script** `disconnect_MV_buildings/disconnect_MV_buildings.py` on the outputted `.h5` grid files before proceeding to **Step 3 (urbs optimization)**.
+
+#### Why is this step necessary?
+Some buildings in the sampled LV grids have large electric loads that should be directly connected to the **Medium-Voltage (MV) network** rather than the Low-Voltage (LV) distribution grid. 
+
+In real-world power distribution:
+- **Public and commercial buildings** with peak electrical demand **> 100 kW** connect directly to the MV grid.
+- **Residential buildings** with peak electrical demand **> 250 kW** connect directly to the MV grid.
+
+#### Why are these buildings in our LV grids in the first place?
+Pylovo (in Step 1) already applies a filtering process to exclude MV-connected buildings when constructing the LV grids. However, the estimated demand differs between Pylovo and SurroGrid / GridExpand. Consequently, some buildings whose peak demand in Pylovo fell under the threshold (for example, a public building estimated at 98 kW in Pylovo and thus attached to the LV grid) are re-evaluated by SurroGrid's demand allocation and exceed the threshold (e.g., > 100 kW). 
+
+#### What does `disconnect_MV_buildings.py` do?
+1. Scans all `.h5` files in the configured directory.
+2. Identifies buildings exceeding the peak electrical demand thresholds:
+   - Public and commercial: `> 100 kW`
+   - Residential: `> 250 kW`
+3. Disconnects them in the pandapower network (`/raw_data/net`) by setting `in_service = False` for their corresponding loads.
+4. **Zeroes out demands (Security layer)**: Sets the pre-URBS time series in `/urbs_in/demand` (and `/urbs_out/MILP/tau_pro` if post-URBS data exists) to `0.0` for all disconnected buses.
+5. Logs statistics showing the total buildings, number of buildings disconnected, and percentage of remaining active buildings.
+
+#### How to run this step:
+
+1. Open `disconnect_MV_buildings/disconnect_MV_buildings.py` and set `INPUT_FOLDER` to the directory containing your demand-allocated `.h5` files (e.g., pointing to `gridalloc/results/` or your cluster results directory):
+   ```python
+   INPUT_FOLDER = "/path/to/gridalloc/results/"
+   ```
+
+2. **Run locally:**
+   ```bash
+   cd GridExpand/2.demand_allocation/disconnect_MV_buildings
+   conda activate grid_alloc
+   python3 disconnect_MV_buildings.py
+   ```
+
+3. **Run on HPC (SLURM):**
+   ```bash
+   cd GridExpand/2.demand_allocation/disconnect_MV_buildings
+   sbatch run_disconnect_MV_buildings.sh
+   ```
 
 ---
 

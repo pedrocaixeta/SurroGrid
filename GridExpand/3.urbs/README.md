@@ -74,6 +74,7 @@ Important:
 
 - If multiple files share the same prefix, the first match is used.
 - If no file matches, the script will crash (index error). Make sure the ID exists.
+- **Pre-processing requirement:** Ensure the input `.h5` files from Step 2 have already been post-processed using `GridExpand/2.demand_allocation/disconnect_MV_buildings/disconnect_MV_buildings.py` to disconnect any buildings exceeding the Medium-Voltage (MV) peak demand thresholds (>100 kW public/commercial, >250 kW residential).
 
 ### 2) Required datasets inside the HDF5
 

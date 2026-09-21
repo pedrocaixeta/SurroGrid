@@ -12,10 +12,10 @@ If you already have compatible `.h5` files (see “HDF5 interface”), you can s
 ## Pipeline at a glance
 
 ```text
-Step 1 (grid sampling)        Step 2 (demand allocation)      Step 3 (urbs optimization)        Step 4 (power flow)
-1.grid_sampling/              2.demand_allocation/            3.urbs/                           4.powerflow/
-  input: pylovo DB + GIS        input: Step-1 .h5               input: Step-2 .h5                input: Step-3 .h5
-  output: raw grid .h5          output: same .h5 + /urbs_in     output: same .h5 + /urbs_out     output: same .h5 + /pwrflw
+Step 1 (sampling)      Step 2 (demand alloc)     Post-process (disconnect MV)     Step 3 (urbs opt)         Step 4 (power flow)
+1.grid_sampling/       2.demand_allocation/      2.demand_allocation/...          3.urbs/                   4.powerflow/
+  input: pylovo DB       input: Step-1 .h5         input: Step-2 .h5                input: Disconnected .h5   input: Step-3 .h5
+  output: raw grid .h5   output: same + /urbs_in   output: disconnected MV loads    output: same + /urbs_out  output: same + /pwrflw
 ```
 
 ### Typical file naming
@@ -45,6 +45,9 @@ GridExpand/
   2.demand_allocation/            # Step 2: allocate demands + build /urbs_in
     environment.yml
     environment_HPC.yml
+    disconnect_MV_buildings/      # Post-processing: disconnect buildings exceeding MV thresholds
+      disconnect_MV_buildings.py
+      run_disconnect_MV_buildings.sh
     gridalloc/
       main.py                     # entrypoint
       config.py                   # paths + constants
@@ -184,13 +187,46 @@ The script selects the first `.h5` in `data/grids/` whose prefix before the firs
   - updated `/raw_data/buildings` (with sampled attributes)
   - new `/urbs_in/*` URBS input tables
 
+### Post-Processing: Disconnect MV Buildings from LV Grids
+
+Location: `2.demand_allocation/disconnect_MV_buildings/`
+
+Before running Step 4.powerflow you **must run the post-processing script** `disconnect_MV_buildings.py`.
+
+#### Why this is required:
+Certain buildings in the LV grids have large electric loads that should realistically be connected directly to the **Medium-Voltage (MV) network**:
+- **Public & commercial buildings** with peak electrical demand **> 100 kW**
+- **Residential buildings** with peak electrical demand **> 250 kW**
+
+**Why are these buildings in our LV grids in the first place?**  
+Pylovo already performs filtering during grid generation to separate MV from LV connections. However, the estimated demand differs between Pylovo and SurroGrid/GridExpand. A building whose peak demand Pylovo estimated just below the threshold (e.g., 98 kW for a public building) was included in the LV grid by Pylovo. When `2.demand_allocation` subsequently computes synthetic profiles, its estimated peak electrical demand may now exceed 100 kW.
+
+The script `disconnect_MV_buildings.py`:
+- Sets `in_service = False` for the corresponding load objects in the pandapower network (`/raw_data/net`).
+- Zeroes out the demand time series in `/urbs_in/demand` (and `/urbs_out/MILP/tau_pro` if present) as a safeguard.
+
+#### How to run:
+1. Edit `INPUT_FOLDER` in `disconnect_MV_buildings.py` to point to your Step 2 output directory (e.g., `GridExpand/2.demand_allocation/gridalloc/results/`).
+2. Run:
+   - **Locally:**
+     ```bash
+     cd GridExpand/2.demand_allocation/disconnect_MV_buildings
+     conda activate grid_alloc
+     python3 disconnect_MV_buildings.py
+     ```
+   - **On HPC (SLURM):**
+     ```bash
+     cd GridExpand/2.demand_allocation/disconnect_MV_buildings
+     sbatch run_disconnect_MV_buildings.sh
+     ```
+
 ### Step 3: URBS optimization (write `/urbs_out/*`)
 
 Location: `3.urbs/`
 
 #### Step 3: Required inputs
 
-- Copy Step-2 result files into: `3.urbs/Input/`
+- Copy Step-2 result files (after running `disconnect_MV_buildings.py`) into: `3.urbs/Input/`
 
 #### Step 3: Run
 

@@ -21,7 +21,7 @@ conda activate grid_alloc
 start_time=$(date +"%Y-%m-%d %H:%M:%S")
 echo "Script started at: $start_time"
 
-srun python3 disconnect_MV_buildings2.py
+srun python3 disconnect_MV_buildings.py
 wait
 
 echo "Done!"
