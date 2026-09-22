@@ -79,7 +79,7 @@ if __name__ == '__main__':
         input_path = os.path.join(input_dir, input_file)
 
         # Create result directory (format: datetime-inputfile-resultname), copy input and runfile into it 
-        result_dir = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/3.Urbs/"
+        result_dir = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/3.Post_Urbs/"
         os.makedirs(result_dir, exist_ok=True)
         result_path = os.path.join(result_dir, input_file) 
         shutil.copyfile(input_path, result_path)
