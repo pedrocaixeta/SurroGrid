@@ -32,8 +32,8 @@ echo "Export ALL script started at: $start_time"
 
 # Case 2: ALL_buildings_Pedro_PostUrbs.xlsx
 srun python3 export_all_buildings.py \
-    --input-folder "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/Verify 2.Dmd_alloc on Elias's Grids/" \
-    --output-file "output/3rdRUN_verify2DmdAlloc_on_Elias_Data.xlsx"
+    --input-folder "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/2.Demand_Allocated/" \
+    --output-file "output/ALL_buildings_1st230Grids_4thRUN.xlsx"
 
 # Case 3: verification_2dmd_alloc.xlsx
 #srun python3 export_all_buildings.py \
