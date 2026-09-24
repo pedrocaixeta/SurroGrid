@@ -557,8 +557,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--out_dir",
-        default="/dss/dsshome1/05/go49cer2/SurroGrid_3rdRUN/Extra_Scripts/Plotting/output",
-        help="Directory to save the plotted image files (default: '/dss/dsshome1/05/go49cer2/SurroGrid_3rdRUN/Extra_Scripts/Plotting/output')."
+        default="/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output",
+        help="Directory to save the plotted image files (default: '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output')."
     )
     args = parser.parse_args()
 
@@ -591,7 +591,7 @@ if __name__ == "__main__":
             "id": 3,
             "label": "Pre-Urbs (PedroC)",
             "title": "Pre-Urbs (PedroC)",
-            "pwrflw_dir": "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/4.Power_Flown/",
+            "pwrflw_dir": "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/",
             "preurbs": True,
             "file_suffix": "_pre_PedroC",
             "color_4_2_a": "crimson",
@@ -602,7 +602,7 @@ if __name__ == "__main__":
             "id": 4,
             "label": "Post-Urbs (PedroC)",
             "title": "Post-Urbs (PedroC)",
-            "pwrflw_dir": "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_RUN/4.Power_Flown/",
+            "pwrflw_dir": "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/",
             "preurbs": False,
             "file_suffix": "_post_PedroC",
             "color_4_2_a": "indigo",
