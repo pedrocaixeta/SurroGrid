@@ -13,9 +13,9 @@
 #SBATCH --error=logs/errors/%j_error.log
 
 # --- LRZ Cluster Specific Resources ---
-# Using cm2 cluster / cm2_tiny partition to avoid the serial partition queue
-#SBATCH --clusters=cm2
-#SBATCH --partition=cm2_tiny
+# Using inter cluster / cm4_inter partition as requested
+#SBATCH --clusters=inter
+#SBATCH --partition=cm4_inter
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=0-00:30:00

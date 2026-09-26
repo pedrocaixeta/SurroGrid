@@ -12,16 +12,18 @@ The frequency is calculated as:
 import os
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg') # Force non-interactive backend to avoid Wayland/Qt display warnings
 import matplotlib.pyplot as plt
 
 # Disable HDF5 file locking to prevent crashes on shared/cluster filesystems
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/EliasH/PostPowerflow/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size 4th RUN"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_4thRUN.png"
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - Elias"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_Elias.png"
 PLOT_COLORMAP = "Greens" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
 
 
@@ -179,7 +181,7 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
     
     ax.set_title(title, fontsize=12)
     ax.set_xlabel('Number of Grid Buildings', fontsize=12)
-    ax.set_ylabel('Violation Frequency [%]\n(>0: Undervoltage, <0: Overvoltage)', fontsize=12)
+    ax.set_ylabel('Violation Incidence [%]', fontsize=12)
     ax.set_xlim(left=0)
     
     ax.grid(True, which='both', linestyle='-', alpha=0.3)
@@ -193,9 +195,28 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
     cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label('Max Violation Magnitude [p.u.]', fontsize=10)
     
+    # Calculate violation percentages
+    total_grids = len(number_of_buildings)
+    grids_with_under = sum(1 for idx in number_of_buildings.keys() if undervoltage[idx] > 0)
+    grids_with_over = sum(1 for idx in number_of_buildings.keys() if overvoltage[idx] > 0)
+    pct_under = (grids_with_under / total_grids) * 100.0 if total_grids > 0 else 0
+    pct_over = (grids_with_over / total_grids) * 100.0 if total_grids > 0 else 0
+    
+    caption = (
+        "The bubbles in the positive pane represent the incidence of undervoltage violations (when the voltage magnitude drops below 0.9 p.u.) "
+        "and those in the negative pane represent the incidence of overvoltage violations (when the voltage magnitude rises above 1.1 p.u.). "
+        "The 'Violation Incidence' is calculated as the count of voltage violations for all building buses "
+        "divided by (quantity of buildings in the grid × total quantity of time stamps). "
+        f"{pct_under:.1f}% of the grids violate < 0.9 p.u. and {pct_over:.1f}% violate > 1.1 p.u."
+    )
+    
+    # Add the text below the x-axis
+    fig.text(0.05, -0.05, caption, ha='left', va='top', fontsize=9, color='#555555', wrap=True)
+    
     os.makedirs(output_dir, exist_ok=True)
     out_path = os.path.join(output_dir, filename)
-    plt.savefig(out_path, dpi=300)
+    # Use bbox_inches='tight' so the text below the plot isn't cut off when saved
+    plt.savefig(out_path, dpi=300, bbox_inches='tight')
     plt.close()
     print(f"\nSuccessfully saved scatter plot to: {out_path}")
 
