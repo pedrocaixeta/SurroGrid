@@ -20,11 +20,11 @@ import matplotlib.pyplot as plt
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/3rd_RUN/4.Power_Flown/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_batch/1st_RUN/result4.powerflow/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 3rd RUN"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_3rdRUN.png"
-PLOT_COLORMAP = "Wistia" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 1st RUN"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_1stRUN.png"
+PLOT_COLORMAP = "Greens" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
 
 
 def get_building_bus_ids(filepath):
