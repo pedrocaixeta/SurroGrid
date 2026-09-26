@@ -20,11 +20,11 @@ import matplotlib.pyplot as plt
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_batch/1st_RUN/result4.powerflow/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/EliasH/PostPowerflow/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 1st RUN"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_1stRUN.png"
-PLOT_COLORMAP = "Greens" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - Elias"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_Elias.png"
+PLOT_COLORMAP = "Blues" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
 
 
 def get_building_bus_ids(filepath):
@@ -240,8 +240,8 @@ def main():
     for filename in os.listdir(PATH_TO_GRIDS):
         
         # 1. Skip files that don't match the expected name format
-        if not filename.endswith("_pwrflw.h5"):
-            continue    
+        #if not filename.endswith("_pwrflw.h5"):
+        #    continue    
         
         filepath = os.path.join(PATH_TO_GRIDS, filename)
         grid_index = filename.split('_')[0]
