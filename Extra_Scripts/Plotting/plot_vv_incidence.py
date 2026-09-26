@@ -18,10 +18,10 @@ import matplotlib.pyplot as plt
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/EliasH/PostPowerflow/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - Elias"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_Elias.png"
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size 4th RUN"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_4thRUN.png"
 PLOT_COLORMAP = "Greens" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
 
 
