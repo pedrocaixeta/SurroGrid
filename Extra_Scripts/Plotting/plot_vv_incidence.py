@@ -21,11 +21,12 @@ import matplotlib.colors as mcolors
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "Extra_Scripts/Plotting/output"
-PATH_TO_PLOT = "Extra_Scripts/Plotting/output"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - Local"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size.png"
-PLOT_COLORMAP = "Blues" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
+PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 4th RUN - 1st 230 Grids"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_4thRUN_1st230grids.png"
+PLOT_COLORMAP_UNDER = "Yellows" # Colormap for undervoltage (e.g. 'Blues_r', 'Purples_r')
+PLOT_COLORMAP_OVER = "Purples"     # Colormap for overvoltage (e.g. 'Reds', 'Oranges')
 
 
 def get_building_bus_ids(filepath):
@@ -110,8 +111,8 @@ def print_voltage_statistics(grid_index, n_buildings, undervoltage_count, overvo
 
     print(f"\n--- BUILDING BUS VOLTAGE VIOLATION STATISTICS: {grid_index} ---")
     print(f"Number of buildings:              {n_buildings:,}")
-    print(f"Building bus IDs:                 {building_columns}")
-    print(f"Total observations (Time x Bld):  {total_observations:,}")
+    #print(f"Building bus IDs:                 {building_columns}")
+    #print(f"Total observations (Time x Bld):  {total_observations:,}")
     print(f"Observed voltage range:           [{v_min_observed:.4f}, {v_max_observed:.4f}] p.u.")
     print("-" * 60)
     print(f"Undervoltage Violations (< 0.9 p.u.):")
@@ -128,7 +129,7 @@ def print_voltage_statistics(grid_index, n_buildings, undervoltage_count, overvo
     print("=" * 70)
 
 
-def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvoltage, v_min_obs, v_max_obs, output_dir, title, filename, colormap):
+def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvoltage, v_min_obs, v_max_obs, output_dir, title, filename, cmap_under, cmap_over):
     """
     Generates a scatter plot of Voltage Violation Frequency vs Number of Grid Buildings.
     Undervoltage frequency is plotted on the positive Y-axis.
@@ -163,30 +164,52 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
         
     fig, ax = plt.subplots(figsize=(8.5, 4.5), constrained_layout=True)
     
-    # Create a symmetric diverging colormap from the chosen sequential one
-    base_cmap = plt.get_cmap(colormap)
-    colors_left = base_cmap(np.linspace(1, 0, 128))
-    colors_right = base_cmap(np.linspace(0, 1, 128))
-    symmetric_cmap = mcolors.LinearSegmentedColormap.from_list('symmetric_' + colormap, np.vstack((colors_left, colors_right)))
-    
-    # Use TwoSlopeNorm to center the colormap exactly at 1.0 p.u.
+    # Determine bounds
     vmin_val = min(extreme_voltages) if extreme_voltages else 0.7
     vmax_val = max(extreme_voltages) if extreme_voltages else 1.2
-    if vmin_val >= 1.0: vmin_val = 0.9
-    if vmax_val <= 1.0: vmax_val = 1.1
-    norm = mcolors.TwoSlopeNorm(vmin=vmin_val, vcenter=1.0, vmax=vmax_val)
+    if vmin_val >= 0.9: vmin_val = 0.8
+    if vmax_val <= 1.1: vmax_val = 1.2
     
-    # Plot using a colormap based on actual voltage with the symmetric scale
+    # Create a custom colormap that is completely transparent between 0.9 and 1.1
+    c_under = plt.get_cmap(cmap_under)
+    c_over = plt.get_cmap(cmap_over)
+    p1 = (0.9 - vmin_val) / (vmax_val - vmin_val)
+    p2 = (1.1 - vmin_val) / (vmax_val - vmin_val)
+    
+    positions = []
+    colors_list = []
+    def with_alpha(color, alpha=0.8):
+        return (color[0], color[1], color[2], alpha)
+
+    for i in np.linspace(0, 1, 50):
+        positions.append(i * p1)
+        colors_list.append(with_alpha(c_under(i)))
+        
+    positions.append(p1 + 1e-6)
+    colors_list.append((1, 1, 1, 0)) # Fully transparent white
+    positions.append(p2 - 1e-6)
+    colors_list.append((1, 1, 1, 0))
+    
+    for i in np.linspace(0, 1, 50):
+        positions.append(p2 + i * (1 - p2))
+        colors_list.append(with_alpha(c_over(i)))
+        
+    custom_cmap = mcolors.LinearSegmentedColormap.from_list('custom_vv', list(zip(positions, colors_list)))
+    
+    # Ensure colored points have a solid edge, while healthy points have a faint edge
+    edge_colors = ['darkgray' if (v < 0.9 or v > 1.1) else (0.7, 0.7, 0.7, 0.5) for v in extreme_voltages]
+    
+    # Plot using the custom colormap with transparent deadband
     scatter = ax.scatter(
         building_counts, 
         violation_freqs, 
         c=extreme_voltages, 
-        cmap=symmetric_cmap, 
-        alpha=0.8, 
-        edgecolor='darkgray', # Slight edge
+        cmap=custom_cmap, 
+        edgecolors=edge_colors,
         linewidth=0.5,
         s=40,
-        norm=norm
+        vmin=vmin_val,
+        vmax=vmax_val
     )
     
     ax.set_title(title, fontsize=14)
@@ -206,7 +229,7 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
     
     # Move the label to the left side (between the plot and the colorbar)
     cbar.ax.yaxis.set_label_position('left')
-    cbar.set_label('Highest Voltage Violations Observed [p.u.]', fontsize=10, labelpad=15)
+    cbar.set_label('Highest Voltage Violations Observed [p.u.]', fontsize=10, labelpad=5)
     
     # Ensure the absolute minimum and maximum observed voltages are explicitly ticked
     standard_ticks = np.arange(np.ceil(vmin_val * 10) / 10, np.floor(vmax_val * 10) / 10 + 0.05, 0.1)
@@ -286,17 +309,17 @@ def main():
         v_max_obs[grid_index] = voltage_stats['v_max_observed']
         
         # 5. Print statistics about the voltage violation for this grid
-        """print_voltage_statistics(
+        print_voltage_statistics(
             grid_index, 
             number_of_buildings[grid_index], 
             undervoltage[grid_index], 
             overvoltage[grid_index], 
             voltage_stats
-        )"""
+        )
 
     # 6. Generate the scatter plot
     print("\nGenerating scatter plot...")
-    plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvoltage, v_min_obs, v_max_obs, PATH_TO_PLOT, PLOT_TITLE, PLOT_FILENAME, PLOT_COLORMAP)
+    plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvoltage, v_min_obs, v_max_obs, PATH_TO_PLOT, PLOT_TITLE, PLOT_FILENAME, PLOT_COLORMAP_UNDER, PLOT_COLORMAP_OVER)
 
 
 if __name__ == "__main__":
