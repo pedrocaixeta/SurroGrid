@@ -25,7 +25,7 @@ PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_bat
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
 PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 4th RUN - 1st 230 Grids"
 PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_4thRUN_1st230grids.png"
-PLOT_COLORMAP_UNDER = "Yellows" # Colormap for undervoltage (e.g. 'Blues_r', 'Purples_r')
+PLOT_COLORMAP_UNDER = "Wistia_r" # Colormap for undervoltage (e.g. 'Blues_r', 'Purples_r')
 PLOT_COLORMAP_OVER = "Purples"     # Colormap for overvoltage (e.g. 'Reds', 'Oranges')
 
 
@@ -309,13 +309,14 @@ def main():
         v_max_obs[grid_index] = voltage_stats['v_max_observed']
         
         # 5. Print statistics about the voltage violation for this grid
-        print_voltage_statistics(
+        """print_voltage_statistics(
             grid_index, 
             number_of_buildings[grid_index], 
             undervoltage[grid_index], 
             overvoltage[grid_index], 
             voltage_stats
-        )
+        )"""
+        print("Successfully processed grid_index : ", grid_index)
 
     # 6. Generate the scatter plot
     print("\nGenerating scatter plot...")
