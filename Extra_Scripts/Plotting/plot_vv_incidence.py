@@ -21,12 +21,12 @@ import matplotlib.colors as mcolors
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_batch/1st_RUN/result4.powerflow/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 4th RUN - 1st 230 Grids"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_4thRUN_1st230grids.png"
-PLOT_COLORMAP_UNDER = "Wistia_r" # Colormap for undervoltage (e.g. 'Blues_r', 'Purples_r')
-PLOT_COLORMAP_OVER = "Purples"     # Colormap for overvoltage (e.g. 'Reds', 'Oranges')
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 1st RUN"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_1stRUN.png"
+PLOT_COLORMAP_UNDER = "Greens" # Colormap for undervoltage (e.g. 'Blues_r', 'Purples_r')
+PLOT_COLORMAP_OVER = "Blues"     # Colormap for overvoltage (e.g. 'Reds', 'Oranges')
 
 
 def get_building_bus_ids(filepath):
