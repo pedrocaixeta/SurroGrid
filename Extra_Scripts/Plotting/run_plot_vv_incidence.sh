@@ -13,9 +13,10 @@
 #SBATCH --error=logs/errors/%j_error.log
 
 # --- LRZ Cluster Specific Resources ---
-# Using inter cluster / cm4_inter partition as requested
-#SBATCH --clusters=inter
-#SBATCH --partition=cm4_inter
+# The 'inter' cluster only accepts interactive sessions (salloc), not batch jobs (sbatch).
+# Switching to the cm4 cluster's batch partition:
+#SBATCH --clusters=cm4
+#SBATCH --partition=cm4_tiny
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=0-00:30:00
