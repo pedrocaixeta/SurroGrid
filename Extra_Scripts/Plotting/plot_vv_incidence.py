@@ -316,7 +316,6 @@ def main():
             overvoltage[grid_index], 
             voltage_stats
         )"""
-        print("Successfully processed grid_index : ", grid_index)
 
     # 6. Generate the scatter plot
     print("\nGenerating scatter plot...")
