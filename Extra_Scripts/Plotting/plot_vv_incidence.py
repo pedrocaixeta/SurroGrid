@@ -15,15 +15,16 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg') # Force non-interactive backend to avoid Wayland/Qt display warnings
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 # Disable HDF5 file locking to prevent crashes on shared/cluster filesystems
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/EliasH/PostPowerflow/"
-PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - Elias"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_Elias.png"
+PATH_TO_GRIDS = "Extra_Scripts/Plotting/output"
+PATH_TO_PLOT = "Extra_Scripts/Plotting/output"
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - Local"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size.png"
 PLOT_COLORMAP = "Blues" # Choose the colormap (e.g. 'Reds', 'Blues', 'Greens', 'Purples', 'Oranges', 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis')
 
 
@@ -136,7 +137,7 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
     """
     building_counts = []
     violation_freqs = []
-    violation_magnitudes = []
+    extreme_voltages = []
     
     for grid_idx in number_of_buildings.keys():
         n_bld = number_of_buildings[grid_idx]
@@ -146,40 +147,49 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
         under_freq = (undervoltage[grid_idx] / total_obs) * 100.0
         over_freq = (overvoltage[grid_idx] / total_obs) * 100.0
         
-        # Calculate maximum violation magnitudes
-        under_mag = max(0.0, 0.9 - v_min_obs[grid_idx]) if not np.isnan(v_min_obs[grid_idx]) else 0.0
-        over_mag = max(0.0, v_max_obs[grid_idx] - 1.1) if not np.isnan(v_max_obs[grid_idx]) else 0.0
+        # Use actual voltage extremes directly (defaulting to healthy 1.0 if missing)
+        v_min_val = v_min_obs[grid_idx] if not np.isnan(v_min_obs[grid_idx]) else 1.0
+        v_max_val = v_max_obs[grid_idx] if not np.isnan(v_max_obs[grid_idx]) else 1.0
         
-        # Add undervoltage point (positive Y)
+        # Add overvoltage point (positive Y)
         building_counts.append(n_bld)
-        violation_freqs.append(under_freq)
-        violation_magnitudes.append(under_mag)
+        violation_freqs.append(over_freq)
+        extreme_voltages.append(v_max_val)
         
-        # Add overvoltage point (negative Y)
+        # Add undervoltage point (negative Y)
         building_counts.append(n_bld)
-        violation_freqs.append(-over_freq)
-        violation_magnitudes.append(over_mag)
+        violation_freqs.append(-under_freq)
+        extreme_voltages.append(v_min_val)
         
     fig, ax = plt.subplots(figsize=(8.5, 4.5), constrained_layout=True)
     
-    # Ensure there's a valid maximum for the colormap
-    vmax = max(violation_magnitudes) if violation_magnitudes and max(violation_magnitudes) > 0 else 0.1
+    # Create a symmetric diverging colormap from the chosen sequential one
+    base_cmap = plt.get_cmap(colormap)
+    colors_left = base_cmap(np.linspace(1, 0, 128))
+    colors_right = base_cmap(np.linspace(0, 1, 128))
+    symmetric_cmap = mcolors.LinearSegmentedColormap.from_list('symmetric_' + colormap, np.vstack((colors_left, colors_right)))
     
-    # Plot using a colormap based on violation magnitude
+    # Use TwoSlopeNorm to center the colormap exactly at 1.0 p.u.
+    vmin_val = min(extreme_voltages) if extreme_voltages else 0.7
+    vmax_val = max(extreme_voltages) if extreme_voltages else 1.2
+    if vmin_val >= 1.0: vmin_val = 0.9
+    if vmax_val <= 1.0: vmax_val = 1.1
+    norm = mcolors.TwoSlopeNorm(vmin=vmin_val, vcenter=1.0, vmax=vmax_val)
+    
+    # Plot using a colormap based on actual voltage with the symmetric scale
     scatter = ax.scatter(
         building_counts, 
         violation_freqs, 
-        c=violation_magnitudes, 
-        cmap=colormap, 
+        c=extreme_voltages, 
+        cmap=symmetric_cmap, 
         alpha=0.8, 
-        edgecolor='darkgray', # Slight edge so 0 magnitude (white/light) is still visible
+        edgecolor='darkgray', # Slight edge
         linewidth=0.5,
         s=40,
-        vmin=0.0,
-        vmax=vmax
+        norm=norm
     )
     
-    ax.set_title(title, fontsize=12)
+    ax.set_title(title, fontsize=14)
     ax.set_xlabel('Number of Grid Buildings', fontsize=12)
     ax.set_ylabel('Violation Incidence [%]', fontsize=12)
     ax.set_xlim(left=0)
@@ -193,7 +203,15 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
     
     # Add a colorbar to explain the color coding
     cbar = plt.colorbar(scatter, ax=ax)
-    cbar.set_label('Max Violation Magnitude [p.u.]', fontsize=10)
+    
+    # Move the label to the left side (between the plot and the colorbar)
+    cbar.ax.yaxis.set_label_position('left')
+    cbar.set_label('Highest Voltage Violations Observed [p.u.]', fontsize=10, labelpad=15)
+    
+    # Ensure the absolute minimum and maximum observed voltages are explicitly ticked
+    standard_ticks = np.arange(np.ceil(vmin_val * 10) / 10, np.floor(vmax_val * 10) / 10 + 0.05, 0.1)
+    all_ticks = sorted(list(set(np.round(standard_ticks, 2)) | {round(vmin_val, 3), 1.0, round(vmax_val, 3)}))
+    cbar.set_ticks(all_ticks)
     
     # Calculate violation percentages
     total_grids = len(number_of_buildings)
@@ -203,8 +221,8 @@ def plot_voltage_violations_scatter(number_of_buildings, undervoltage, overvolta
     pct_over = (grids_with_over / total_grids) * 100.0 if total_grids > 0 else 0
     
     caption = (
-        "The bubbles in the positive pane represent the incidence of undervoltage violations (when the voltage magnitude drops below 0.9 p.u.) "
-        "and those in the negative pane represent the incidence of overvoltage violations (when the voltage magnitude rises above 1.1 p.u.). "
+        "The bubbles in the positive pane represent the incidence of overvoltage violations (when the voltage magnitude rises above 1.1 p.u.) "
+        "and those in the negative pane represent the incidence of undervoltage violations (when the voltage magnitude drops below 0.9 p.u.). "
         "The 'Violation Incidence' is calculated as the count of voltage violations for all building buses "
         "divided by (quantity of buildings in the grid × total quantity of time stamps). "
         f"{pct_under:.1f}% of the grids violate < 0.9 p.u. and {pct_over:.1f}% violate > 1.1 p.u."
@@ -240,8 +258,8 @@ def main():
     for filename in os.listdir(PATH_TO_GRIDS):
         
         # 1. Skip files that don't match the expected name format
-        #if not filename.endswith("_pwrflw.h5"):
-        #    continue    
+        if not filename.endswith("_pwrflw.h5"):
+            continue    
         
         filepath = os.path.join(PATH_TO_GRIDS, filename)
         grid_index = filename.split('_')[0]
