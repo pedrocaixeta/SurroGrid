@@ -24,11 +24,11 @@ import matplotlib.dates as mdates
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_batch/1st_RUN/result4.powerflow/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Voltage Magnitude Time series, grouped by grid size"
-PLOT_FILENAME = "vm_timeseries_4thRUN_1st230grids.png"
-PLOT_COLOR = "purple" 
+PLOT_TITLE = "Voltage Magnitude Time series, grouped by grid size - 1st Run"
+PLOT_FILENAME = "vm_timeseries_1stRUN.png"
+PLOT_COLOR = "green" 
 
 
 def extract_building_vm_for_grid(filepath):
@@ -160,8 +160,8 @@ def plot_binned_voltage_magnitude_timeseries(binned_stats, output_dir, title, fi
     fig, axes = plt.subplots(num_bins, 2, figsize=(16, fig_height), gridspec_kw={'width_ratios': [2, 1], 'height_ratios': height_ratios})
     fig.suptitle(title, fontsize=18, y=0.985)
     
-    # Add shared vertical axis label for bins on the far left, shifted right to be closer to plots
-    fig.supylabel("Average Voltage Magnitude [p.u.]", fontsize=16, x=0.03, fontweight='bold')
+    # Add shared vertical axis label for bins on the far left, shifted left to increase space
+    fig.supylabel("Average Voltage Magnitude [p.u.]", fontsize=16, x=0.01, fontweight='bold')
     
     # Set up consistent x-axis data structures
     time_index = pd.date_range(start="2023-01-01 00:00", periods=8760, freq="h")
@@ -302,7 +302,7 @@ def plot_binned_voltage_magnitude_timeseries(binned_stats, output_dir, title, fi
     )
     
     # Remove tight_layout completely to gain absolute manual control over spacing
-    plt.subplots_adjust(top=0.96, bottom=0.08, left=0.1, right=0.98, hspace=0.1, wspace=0.05)
+    plt.subplots_adjust(top=0.96, bottom=0.08, left=0.12, right=0.98, hspace=0.1, wspace=0.05)
     
     # Anchor caption nicely using the last (bottom-left) plot's bounding box
     fig.text(0.1, 0.01, caption, ha='left', va='bottom', fontsize=12, color='#333333')
