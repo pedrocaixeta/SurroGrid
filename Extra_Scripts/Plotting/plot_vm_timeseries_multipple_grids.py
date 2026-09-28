@@ -24,11 +24,11 @@ import matplotlib.dates as mdates
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "Extra_Scripts/Plotting/output/"
-PATH_TO_PLOT = "Extra_Scripts/Plotting"
-PLOT_TITLE = "Average voltage magnitude in building buses (Binned by Grid Size)"
-PLOT_FILENAME = "average_voltage_magnitude_timeseries.png"
-PLOT_COLOR = "#1f77b4"  # Default matplotlib blue color
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
+PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
+PLOT_TITLE = "Voltage Magnitude Time series, grouped by grid size"
+PLOT_FILENAME = "vm_timeseries_4thRUN_1st230grids.png"
+PLOT_COLOR = "purple" 
 
 
 def extract_building_vm_for_grid(filepath):
