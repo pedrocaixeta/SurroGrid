@@ -281,8 +281,8 @@ def main():
     for filename in os.listdir(PATH_TO_GRIDS):
         
         # 1. Skip files that don't match the expected name format
-        #if not filename.endswith("_pwrflw.h5"):
-        #    continue    
+        if not filename.endswith("_pwrflw.h5"):
+            continue    
         
         filepath = os.path.join(PATH_TO_GRIDS, filename)
         grid_index = filename.split('_')[0]
