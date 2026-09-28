@@ -24,11 +24,11 @@ import matplotlib.dates as mdates
 os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
-PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/2nd_batch/1st_RUN/result4.powerflow/"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/EliasH/PostPowerflow/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Voltage Magnitude Time series, grouped by grid size - 1st Run"
-PLOT_FILENAME = "vm_timeseries_1stRUN.png"
-PLOT_COLOR = "green" 
+PLOT_TITLE = "Voltage Magnitude Time series, grouped by grid size - Elias"
+PLOT_FILENAME = "vm_timeseries_Elias.png"
+PLOT_COLOR = "blue" 
 
 
 def extract_building_vm_for_grid(filepath):
