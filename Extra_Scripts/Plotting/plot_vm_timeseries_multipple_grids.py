@@ -75,8 +75,8 @@ def compute_binned_grid_vm_statistics(grids_dir, num_bins=5):
     
     print(f"Scanning grids in: {grids_dir}")
     for filename in os.listdir(grids_dir):
-        if not filename.endswith("_pwrflw.h5"):
-            continue
+        #if not filename.endswith("_pwrflw.h5"):
+        #    continue
             
         filepath = os.path.join(grids_dir, filename)
         vm_df = extract_building_vm_for_grid(filepath)
