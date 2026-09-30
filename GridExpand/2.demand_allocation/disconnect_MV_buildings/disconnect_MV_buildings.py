@@ -102,7 +102,6 @@ def process_hdf5_file(file_path):
     matching_buildings_count = 0
 
     for idx, row in df_buildings.iterrows():
-        bldg_use = str(row.get('use', '')).strip().lower()
         bus_id = row.get('bus')
         
         # Skip if building is not attached to any bus
@@ -116,11 +115,15 @@ def process_hdf5_file(file_path):
         
         should_disconnect = False
         
+        # Determine building type based on floor areas
+        res_area = row.get('residential_floor_area')
+        res_area = 0.0 if pd.isna(res_area) else float(res_area)
+        
         # Determine if building exceeds the allowed peak demand threshold
-        if bldg_use in ['public', 'commercial']:
+        if res_area == 0.0:
             if peak_demand > COMMERCIAL_PUBLIC_THRESHOLD_KW:
                 should_disconnect = True
-        elif bldg_use == 'residential':
+        else:
             if peak_demand > RESIDENTIAL_THRESHOLD_KW:
                 should_disconnect = True
                 
