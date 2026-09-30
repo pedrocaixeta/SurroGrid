@@ -31,7 +31,7 @@ warnings.filterwarnings('ignore', category=PerformanceWarning)
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
 # Folder containing intermediate allocated-demand grid H5 files
-INPUT_FOLDER = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/2.Demand_Allocated/"
+INPUT_FOLDER = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/3.Post_Urbs/"
 
 # Peak demand thresholds in kilowatts (kW)
 COMMERCIAL_PUBLIC_THRESHOLD_KW = 100.0
