@@ -189,9 +189,47 @@ def process_file_helper(args):
                 res_post_exp_peak.append(post_export_peaks.get(bus_id, 0.0))
                 res_post_exp_total.append(post_export_totals.get(bus_id, 0.0))
 
+            # Attempt to read RegioStar7 class from region data
+            regiostar = ''
+            try:
+                # The region dataset is stored as a Pandas Series
+                df_region = pd.read_hdf(str(h5_file), key='/raw_data/region')
+                regio_code = int(df_region['regio7'])
+                
+                # Map the RegioStaR 7 code to a short, accurate description
+                regiostar_map = {
+                    71: "71 (Urban - Metropolis)",
+                    72: "72 (Urban - Large City)",
+                    73: "73 (Urban - Medium City)",
+                    74: "74 (Urban - Small City/Village)",
+                    75: "75 (Rural - Central City)",
+                    76: "76 (Rural - Medium City)",
+                    77: "77 (Rural - Small City/Village)"
+                }
+                regiostar = regiostar_map.get(regio_code, str(regio_code))
+            except Exception:
+                pass
+
+            def extract_roof_area(roof_data):
+                """
+                Extracts the total PV rooftop area from the roof data.
+                The roof data is a list of tuples, where each tuple represents a roof section
+                and the first element of the tuple is the effectively usable area.
+                """
+                total_area = 0.0
+                try:
+                    for roof_section in roof_data:
+                        total_area += float(roof_section[0])
+                except Exception:
+                    pass
+                
+                return total_area
+
             # Add the calculated stats as new columns in the DataFrame
             massive['Pylovo Peak Load (kW)'] = res_pylovo
             massive['Connected to Net'] = res_in_service
+            massive['RegioStar7'] = regiostar
+            massive['PV Rooftop Area (m2)'] = massive['roofs'].apply(extract_roof_area) if 'roofs' in massive.columns else 0.0
             
             massive['Peak Elec Load Pre-URBS (kW)'] = res_pre['Peak electricity']
             massive['Total Elec Energy Pre-URBS (kWh)'] = res_pre['Total electricity']
@@ -215,7 +253,7 @@ def process_file_helper(args):
             
             # Here is the list of the new columns we've created above
             new_calculated_columns = [
-                'Grid Index', 'PLZ', 'OSM ID', 'Bus ID', 'Connected to Net', 'total area',
+                'Grid Index', 'PLZ', 'OSM ID', 'Bus ID', 'RegioStar7', 'Connected to Net', 'total area', 'PV Rooftop Area (m2)',
                 'Pylovo Peak Load (kW)',
                 'Peak Elec Load Pre-URBS (kW)', 'Total Elec Energy Pre-URBS (kWh)',
                 'Peak Space Heat Load Pre-URBS (kW)', 'Total Space Heat Energy Pre-URBS (kWh)',
