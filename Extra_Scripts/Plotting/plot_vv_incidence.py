@@ -23,8 +23,8 @@ os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 # --- CONFIGURATION ---
 PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
 PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
-PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 1200 Grids 4th Run"
-PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_1200 Grids 4th Run.png"
+PLOT_TITLE = "Incidence of Voltage Violations by Grid Size - 4th Run all grids"
+PLOT_FILENAME = "incidence_of_voltage_violations_by_grid_size_AllGrids_4thRun.png"
 PLOT_COLORMAP_UNDER = "YlOrBr" # Colormap for undervoltage (e.g. 'Blues_r', 'Purples_r'. 'YlOrBr')
 PLOT_COLORMAP_OVER = "Purples"     # Colormap for overvoltage (e.g. 'Reds', 'Oranges')
 
