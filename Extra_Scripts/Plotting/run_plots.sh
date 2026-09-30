@@ -27,7 +27,7 @@
 #SBATCH --partition=serial_std          # Submit to standard serial queue
 #SBATCH --ntasks=1                      # Run on a single task/process
 #SBATCH --cpus-per-task=4               # Allocate 4 CPUs for calculations
-#SBATCH --time=0-00:15:00               # Time limit (15 minutes max)
+#SBATCH --time=0-00:35:00               # Time limit (15 minutes max)
 #SBATCH --mem-per-cpu=4000M             # Request 4GB of RAM per CPU
 
 # Make sure our log directories exist on the HPC file system
