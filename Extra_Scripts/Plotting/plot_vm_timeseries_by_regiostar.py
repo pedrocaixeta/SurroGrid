@@ -25,10 +25,10 @@ os.environ['HDF5_USE_FILE_LOCKING'] = 'FALSE'
 
 # --- CONFIGURATION ---
 # Using the output folder that contains the sample grids
-PATH_TO_GRIDS = "/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/Extra_Scripts/Plotting/output"
-PATH_TO_PLOT = "/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/Extra_Scripts/Plotting/output"
+PATH_TO_GRIDS = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
+PATH_TO_PLOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/Extra_Scripts/Plotting/output/My_figures"
 PLOT_TITLE = "Voltage Magnitude Time series, grouped by RegioStar7 class"
-PLOT_FILENAME = "vm_timeseries_by_regiostar.png"
+PLOT_FILENAME = "vm_timeseries_by_regiostar_4thRUN_allGrids_afterMV_disconnection.png"
 PLOT_COLOR = "purple" 
 
 def get_regiostar_class(filepath):
