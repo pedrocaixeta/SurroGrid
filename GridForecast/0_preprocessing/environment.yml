@@ -15,5 +15,6 @@ dependencies:
   - jupyterlab
   - pytables
   - h5netcdf
+  - matplotlib
   - pip:
     - h5py
