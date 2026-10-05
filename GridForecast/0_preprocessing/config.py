@@ -16,7 +16,6 @@ class Config:
         input_dir: Absolute path to a folder containing PostPowerflow HDF5 files.
     """
 
-    input_dir = "/dss/dssfs04/lwp-dss-0002/pn98cu/pn98cu-dss-0000/EliasH/PostPowerflow"
-    # input_dir = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/EliasH/PostPowerflow"
+    input_dir = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/"
 
 config = Config()
