@@ -2158,7 +2158,9 @@ class TransformerTrainer:
         df_y_test_raw = pd.read_hdf(test_data_cfg['hdf_data_path'], key=test_data_cfg['key_y']).astype('float32')
 
         if n_bldng_lim is not None:
-            df_X_test_raw = df_X_test_raw[(df_X_test_raw["n_nonres_buildings"] + df_X_test_raw["n_res_buildings"]) > n_bldng_lim]
+            # Filter grids where total building count (pure res + pure nonres + mixed) exceeds threshold
+            total_bldng = df_X_test_raw["n_pure_res_buildings"] + df_X_test_raw["n_pure_nonres_buildings"] + df_X_test_raw.get("n_mixed_buildings", 0)
+            df_X_test_raw = df_X_test_raw[total_bldng > n_bldng_lim]
             df_y_test_raw = df_y_test_raw.loc[df_X_test_raw.index]
 
         # Transform using fitted preprocessor
@@ -2314,7 +2316,9 @@ class TransformerTrainer:
         df_X_test_raw = pd.read_hdf(test_data_cfg['hdf_data_path'], key=test_data_cfg['key_X']).astype('float32')
         df_y_test_raw = pd.read_hdf(test_data_cfg['hdf_data_path'], key=test_data_cfg['key_y']).astype('float32')
         if n_bldng_lim is not None:
-            df_X_test_raw = df_X_test_raw[(df_X_test_raw["n_nonres_buildings"] + df_X_test_raw["n_res_buildings"]) > n_bldng_lim]
+            # Filter grids where total building count (pure res + pure nonres + mixed) exceeds threshold
+            total_bldng = df_X_test_raw["n_pure_res_buildings"] + df_X_test_raw["n_pure_nonres_buildings"] + df_X_test_raw.get("n_mixed_buildings", 0)
+            df_X_test_raw = df_X_test_raw[total_bldng > n_bldng_lim]
             df_y_test_raw = df_y_test_raw.loc[df_X_test_raw.index]
 
         # Transform with fitted preprocessor
