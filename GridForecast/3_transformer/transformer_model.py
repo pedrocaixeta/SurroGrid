@@ -2091,6 +2091,7 @@ class TransformerTrainer:
             shuffle=shuffle,
             num_workers=self.cfg.num_workers,
             pin_memory=self.cfg.pin_memory,
+            persistent_workers=(self.cfg.num_workers > 0), #prevents that workers get killed and recreated between epochs, thus avoiding startup lag and, consequently, saving computational time
             drop_last=False,
         )
 
