@@ -64,7 +64,7 @@ def main():
     from optuna.samplers import TPESampler
 
     # Compute resources
-    STORAGE_ROOT = "/dss/dsshome1/05/ge96ton2/GridForecast/3_transformer/ray_tune/"
+    STORAGE_ROOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/ray_tune/"
     n_cpus_total = 14 #48
     n_gpus_total = 1
     max_concurrent = 1
@@ -89,20 +89,20 @@ def main():
         'loss_type': loss_type,
         # Data pipeline
         '_data': {
-            'hdf_data_path': '/dss/dsshome1/05/ge96ton2/GridForecast/0_preprocessing/Data/ts_train_large_grids.h5',
+            'hdf_data_path': '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/ts_train.h5',
             'key_X': 'X',
             'key_y': 'y',
             'train_grids': 'all',
             'test_ratio': 0.2,
             'random_state': 42,
             'X_BASE_COLS': [
-                #'T', 
+                'T', 
                 'demand_net_active_pre',
-                'mob_avail', "mob_last_avail", 'mobility',
+                #'mob_avail', "mob_last_avail", 'mobility',
                 'heat_water', 'heat_space', 'cop_avg',
                 'PV_prod_expected',
-                'res_bldng_area_base_sum', 'nonres_bldng_area_base_sum', 'bldng_area_floors_sum',
-                'n_cars', 'n_res_buildings', 'n_nonres_buildings', 'n_flats', 'n_occ',
+                'res_bldng_area_base_sum', 'nonres_bldng_area_base_sum', 'mixed_bldng_area_base_sum', 'bldng_area_floors_sum',
+                'n_cars', 'n_pure_res_buildings', 'n_pure_nonres_buildings', 'n_mixed_buildings','n_flats', 'n_occ',
                 'n_lines', 'tot_R_grid', 'regiostar7',
                 ],
             'TARGET_COLS': ['demand_net_active_post', 'demand_net_reactive_post'],
@@ -117,11 +117,11 @@ def main():
                 '8760',
                 ''
             ]),
-            'VMD_COLS': [#'demand_net_active_pre', 'heat_water', 'heat_space', 'cop_avg', 'PV_prod_expected'],
-                'demand_net_active_pre', 'heat_water', 'heat_space', 'cop_avg', 'mob_avail', 'mobility', "mob_last_avail", 'PV_prod_expected'],
+            'VMD_COLS': [#'demand_net_active_pre', 'heat_water', 'heat_space', 'cop_avg', 'PV_prod_expected', 'T', 'mob_avail', 'mobility', "mob_last_avail"],
+                'demand_net_active_pre', 'heat_water', 'heat_space', 'cop_avg', 'PV_prod_expected', 'T'],
             # Explore different numbers of VMD modes
             'VMD_K_MODES': tune.choice([0, 1, 2, 3, 4]),
-            'VMD_APPROACH': 'read',
+            'VMD_APPROACH': 'write',
         },
     })
     # experiment_name = f"HPO_withoutmob_agg{agg_hours}_{loss_type}"

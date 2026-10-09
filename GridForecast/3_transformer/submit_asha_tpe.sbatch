@@ -31,7 +31,7 @@ echo "Running HPO with: agg_hours=${AGG_HOURS}, loss_type=${LOSS_TYPE}"
 
 
 
-srun	--container-mounts=/dss/dsshome1/05/ge96ton2/GridForecast/3_transformer/:/workspace,\
-/dss/dsshome1/05/ge96ton2/GridForecast/3_transformer/data:/data \
-	    --container-image='/dss/dssfs04/lwp-dss-0002/pn98cu/pn98cu-dss-0000/EliasH/containers/nvidia+pytorch+25.06-py3.sqsh' \
+srun	--container-mounts=/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/:/workspace,\
+/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/data:/data \
+	    --container-image='/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/containers/nvidia+pytorch+25.06-py3.sqsh' \
 	    python run_transformer_model_HPO.py --agg-hours "${AGG_HOURS}" --loss-type "${LOSS_TYPE}"

@@ -52,7 +52,7 @@ def main():
 
     # Data config (copied from 2_mlp/run_mlp_models.py)
     DATA_CFG = {
-        'hdf_data_path': '/dss/dsshome1/05/ge96ton2/GridForecast/0_preprocessing/Data/ts_train.h5',
+        'hdf_data_path': '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/ts_train.h5',
         'key_X': 'X',
         'key_y': 'y',
         'train_grids': 'all',
@@ -117,7 +117,7 @@ def main():
     n_gpus_task = max(0, n_gpus_total / max(1, max_concurrent))
 
     # Global settings
-    STORAGE_ROOT = "/dss/dsshome1/05/ge96ton2/GridForecast/2_mlp/ray_tune"  # keep with other runs
+    STORAGE_ROOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/2_mlp/ray_tune"  # keep with other runs
     experiment_name = "mlp_asha_tpe_TS_mae_maex"
     num_samples = 135
     max_epochs = 45
