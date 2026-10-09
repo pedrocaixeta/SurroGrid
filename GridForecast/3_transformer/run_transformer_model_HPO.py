@@ -121,7 +121,7 @@ def main():
                 'demand_net_active_pre', 'heat_water', 'heat_space', 'cop_avg', 'PV_prod_expected', 'T'],
             # Explore different numbers of VMD modes
             'VMD_K_MODES': tune.choice([0, 1, 2, 3, 4]),
-            'VMD_APPROACH': 'write',
+            'VMD_APPROACH': 'read',
         },
     })
     # experiment_name = f"HPO_withoutmob_agg{agg_hours}_{loss_type}"
