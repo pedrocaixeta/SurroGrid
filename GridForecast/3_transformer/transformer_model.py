@@ -232,9 +232,12 @@ class Preprocessor:
         output_name = "_".join(cleaned_cols)
         filename = f"VMD{vmd_settings['K']}_{output_name}.h5"
 
+        vmd_data_dir = Path(__file__).resolve().parent / "data"
+        file_path = str(vmd_data_dir / filename)
+
         if vmd_approach == "read":
             try:
-                grid_vmd_signal = pd.read_hdf(f"/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/GridForecast/3_transformer/data/{filename}", key=f"data_{type}")
+                grid_vmd_signal = pd.read_hdf(file_path, key=f"data_{type}")
                 grid_vmd_signal.index = signals.index
                 return grid_vmd_signal
             except (FileNotFoundError, KeyError) as e:
@@ -256,7 +259,7 @@ class Preprocessor:
         grid_vmd_signal.index = signals.index
 
         if vmd_approach == "write":
-            grid_vmd_signal.to_hdf(f"/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/GridForecast/3_transformer/data/{filename}", key=f"data_{type}", mode="a")
+            grid_vmd_signal.to_hdf(file_path, key=f"data_{type}", mode="a")
 
         return grid_vmd_signal
 
@@ -2711,7 +2714,11 @@ def build_tune_trainable():
 
         trainer = TransformerTrainer(config)
         for _ in range(epochs):
-            trainer.step()
+            metrics = trainer.step()
+            # If training diverged to NaN or Inf, abort early to save compute
+            val_loss = metrics.get('val_loss') if metrics else None
+            if val_loss is not None and (math.isnan(float(val_loss)) or math.isinf(float(val_loss))):
+                break
     return _trainable
 
 
