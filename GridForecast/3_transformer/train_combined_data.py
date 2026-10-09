@@ -1,5 +1,16 @@
+import torch, math, os, json, subprocess, sys
 from transformer_model import TransformerTrainer, TransformerConfig
-import torch, math, os, json
+
+# Ensure PyTables dependency for pandas HDF5 loading inside the container
+try:
+    import tables
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "tables"])
+
+# Strategy to make the job run faster in the HPC: Enable TensorFloat-32 (TF32) for dramatic speedup on Ampere (A100) and Hopper (H100) Tensor Cores
+if torch.cuda.is_available():
+    torch.set_float32_matmul_precision('high')
+
 
 manual_cfg = {
     # Preprocessing settings

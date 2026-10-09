@@ -2,13 +2,13 @@
 #SBATCH --job-name=train_combined
 #SBATCH --output=logs/out/%x-%j.out
 #SBATCH --error=logs/error/%x-%j.err
-#SBATCH --time=04:00:00
-#SBATCH --partition=lrz-dgx-a100-80x8,lrz-hgx-a100-80x4,lrz-hgx-h100-94x4
+#SBATCH --time=00:45:00
+#SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=14
 #SBATCH --gres=gpu:1
-#SBATCH --mem=128G
+#SBATCH --mem=64G
 
 mkdir -p logs/out logs/error models
 
