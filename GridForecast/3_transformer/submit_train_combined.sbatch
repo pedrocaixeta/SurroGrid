@@ -3,7 +3,7 @@
 #SBATCH --output=logs/out/%x-%j.out
 #SBATCH --error=logs/error/%x-%j.err
 #SBATCH --time=00:45:00
-#SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8
+#SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8,lrz-v100x2,lrz-dgx-1-v100x8
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=14
