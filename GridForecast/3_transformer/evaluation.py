@@ -10,6 +10,7 @@ Most metric functions expect inputs as `pandas.DataFrame` objects indexed by a
 
 import numpy as np
 import gc
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -1384,22 +1385,24 @@ class EvaluationMetrics:
         return pd.Series(pred - n_periods * period)
         
 
-    def plot_evaluation(self, y_val, y_val_pred, base_agg_hours, skip_feedin: bool = False):
+    def plot_evaluation(self, y_val, y_val_pred, base_agg_hours, skip_feedin: bool = False,
+                        save_dir: str | None = None, target_name: str | None = None):
         """
         Optionally, if reactive power DataFrames were attached to the instances (through caller),
         add phase-angle plots. For backward-compatibility, this function keeps the original
         signature, but internal helper will look for attributes set by run_model_evaluation.
         """
         col = y_val.columns[0]
+        prefix = f"{target_name}_" if target_name else ""
         plot_jobs = [
-            (self.plot_true_vs_pred_and_quantile_errors, (y_val, y_val_pred, "Demand (Timestep)"), {}),
-            (self.plot_grid_mape_quantile_errors, (y_val, y_val_pred), {}),
-            (self.plot_mean_timeseries, (y_val, y_val_pred, base_agg_hours), {}),
-            # (self.plot_median_error_batch_timeseries, (y_val, y_val_pred), {}),
-            (self.plot_worst_error_batch_timeseries, (y_val, y_val_pred, base_agg_hours), {}),
-            (self.plot_worst_error_batch_timeseries_agg, (y_val, y_val_pred, base_agg_hours), {}),
-            (self.plot_sorted_demand_curve, (y_val, y_val_pred), {}),
-            (self.plot_true_vs_pred_and_halfnormal_quantile_errors,
+            ("01_demand_timestep", self.plot_true_vs_pred_and_quantile_errors, (y_val, y_val_pred, "Demand (Timestep)"), {}),
+            ("02_grid_mape_quantile_errors", self.plot_grid_mape_quantile_errors, (y_val, y_val_pred), {}),
+            ("03_mean_timeseries", self.plot_mean_timeseries, (y_val, y_val_pred, base_agg_hours), {}),
+            # ("median_error_batch_timeseries", self.plot_median_error_batch_timeseries, (y_val, y_val_pred), {}),
+            ("04_worst_error_batch_timeseries", self.plot_worst_error_batch_timeseries, (y_val, y_val_pred, base_agg_hours), {}),
+            ("05_worst_error_batch_timeseries_agg", self.plot_worst_error_batch_timeseries_agg, (y_val, y_val_pred, base_agg_hours), {}),
+            ("06_sorted_demand_curve", self.plot_sorted_demand_curve, (y_val, y_val_pred), {}),
+            ("07_peak_demand_grid_batched", self.plot_true_vs_pred_and_halfnormal_quantile_errors,
                 (y_val.groupby(level='batch')[col].agg([("max", "max")]),
                  y_val_pred.groupby(level='batch')[col].agg([("max", "max")]),
                  "Peak Demand (Grid Batched)"),
@@ -1407,17 +1410,17 @@ class EvaluationMetrics:
         ]
         if not skip_feedin:
             plot_jobs.extend([
-                (self.plot_true_vs_pred_and_halfnormal_quantile_errors,
+                ("08_peak_feedin_grid_batched", self.plot_true_vs_pred_and_halfnormal_quantile_errors,
                     (y_val.groupby(level='batch')[col].agg([("min", "min")]),
                      y_val_pred.groupby(level='batch')[col].agg([("min", "min")]),
                      "Peak Feed-In (Grid Batched)"),
                     {"grid_batched": True}),
-                (self.plot_true_vs_pred_and_halfnormal_quantile_errors,
+                ("09_aggregated_demand_grid_batched", self.plot_true_vs_pred_and_halfnormal_quantile_errors,
                     (y_val.groupby(level='batch')[col].agg([("positive_sum", lambda x: x[x>0].sum())]),
                      y_val_pred.groupby(level='batch')[col].agg([("positive_sum", lambda x: x[x>0].sum())]),
                      "Aggregated Demand (Grid Batched)"),
                     {"grid_batched": True}),
-                (self.plot_true_vs_pred_and_halfnormal_quantile_errors,
+                ("10_aggregated_feedin_grid_batched", self.plot_true_vs_pred_and_halfnormal_quantile_errors,
                     (y_val.groupby(level='batch')[col].agg([("negative_sum", lambda x: x[x<0].sum())]),
                      y_val_pred.groupby(level='batch')[col].agg([("negative_sum", lambda x: x[x<0].sum())]),
                      "Aggregated Feed-In (Grid Batched)"),
@@ -1425,7 +1428,7 @@ class EvaluationMetrics:
             ])
         # Peak occurrence plots
         plot_jobs.append(
-            (self.plot_true_vs_pred_and_quantile_errors,
+            ("11_peak_demand_occurrence", self.plot_true_vs_pred_and_quantile_errors,
                 (base_agg_hours*y_val[col].groupby(level='batch').idxmax().map(lambda x: x[1]).reset_index(drop=True),
                  base_agg_hours*self.append_overhang(
                         y_val_pred[col].groupby(level='batch').idxmax().map(lambda x: x[1]).values,
@@ -1436,7 +1439,7 @@ class EvaluationMetrics:
         )
         if not skip_feedin:
             plot_jobs.append(
-                (self.plot_true_vs_pred_and_quantile_errors,
+                ("12_peak_feedin_occurrence", self.plot_true_vs_pred_and_quantile_errors,
                     (base_agg_hours*y_val[col].groupby(level='batch').idxmin().map(lambda x: x[1]).reset_index(drop=True),
                      base_agg_hours*self.append_overhang(
                             y_val_pred[col].groupby(level='batch').idxmin().map(lambda x: x[1]).values,
@@ -1454,7 +1457,8 @@ class EvaluationMetrics:
                 ang_true = self._angles_deg_from_pq(y_val, y_val_q)
                 ang_pred = self._angles_deg_from_pq(y_val_pred, y_val_pred_q)
                 plot_jobs.append(
-                    (self.plot_phase_angle_halfnormal_quantile_errors,
+                    ("13_phase_angle_halfnormal_quantile_errors",
+                     self.plot_phase_angle_halfnormal_quantile_errors,
                      (ang_true, ang_pred, "Phase Angle of S"),
                      {})
                 )
@@ -1464,16 +1468,28 @@ class EvaluationMetrics:
         # Submit jobs in order and collect futures in a list
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(func, *args, **kwargs)
-                       for func, args, kwargs in plot_jobs]
+                       for name, func, args, kwargs in plot_jobs]
             # Wait for all to finish
             concurrent.futures.wait(futures)
             # Retrieve results in order
             figures = [f.result() for f in futures]
 
+        # Save figures to disk if save_dir is specified
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            for (name, func, args, kwargs), fig in zip(plot_jobs, figures):
+                if fig is not None:
+                    fig_path = os.path.join(save_dir, f"{prefix}{name}.png")
+                    fig.savefig(fig_path, dpi=150, bbox_inches='tight')
+
         # Display all figures in order
         for fig in figures:
-            display(fig)
-            plt.close(fig)
+            if fig is not None:
+                try:
+                    display(fig)
+                except Exception:
+                    pass
+                plt.close(fig)
 
 
     ############################################################################################################################
@@ -1490,7 +1506,9 @@ class EvaluationMetrics:
                              y_train_pred_reactive: pd.DataFrame | None = None,
                              no_plots: bool = False,
                              base_agg_hours: int = 1,
-                             skip_feedin_metrics: bool = False):
+                             skip_feedin_metrics: bool = False,
+                             save_dir: str | None = None,
+                             target_name: str | None = None):
         """
             Provide already computed prediction DataFrames (original scale) and obtain:
                 - Metrics table (train optional, test mandatory)
@@ -1601,7 +1619,14 @@ class EvaluationMetrics:
                 self._plot_y_val_q = None
                 self._plot_y_val_pred_q = None
 
-            self.plot_evaluation(y_test_true, y_test_pred, base_agg_hours, skip_feedin=skip_feedin_metrics)
+            self.plot_evaluation(
+                y_test_true,
+                y_test_pred,
+                base_agg_hours,
+                skip_feedin=skip_feedin_metrics,
+                save_dir=save_dir,
+                target_name=target_name
+            )
             # except Exception as e:
             #     print(f"Plotting failed: {e}")
         else:

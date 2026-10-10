@@ -2149,7 +2149,7 @@ class TransformerTrainer:
         self.best_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
         return { 'epochs': int(epochs), 'final_loss': float(losses[-1]) if losses else float('nan') }
 
-    def evaluate_on_test_with_plots(self, test_data_cfg: Dict[str, Any], n_bldng_lim = None) -> Dict[str, Any]:
+    def evaluate_on_test_with_plots(self, test_data_cfg: Dict[str, Any], n_bldng_lim = None, save_dir: Optional[str] = None) -> Dict[str, Any]:
         """Evaluate the (already-trained) model on a held-out test set with plots.
 
         test_data_cfg should contain:
@@ -2159,6 +2159,7 @@ class TransformerTrainer:
 
         Uses the fitted preprocessor to transform test features/targets and assembles
         windows identically to training. Produces plots and returns computed metrics.
+        If save_dir is specified, all generated plots are saved to that directory.
         """
         required_keys = ['hdf_data_path', 'key_X', 'key_y']
         for k in required_keys:
@@ -2269,7 +2270,9 @@ class TransformerTrainer:
                     y_train_pred=None,
                     no_plots=False,
                     skip_feedin_metrics=(name == "S"),
-                    base_agg_hours=int(self.cfg.agg_hours)
+                    base_agg_hours=int(self.cfg.agg_hours),
+                    save_dir=save_dir,
+                    target_name=name
                 )
 
             # Optional: angle plot/metrics for S
@@ -2281,6 +2284,10 @@ class TransformerTrainer:
                 ang_true = evaluator._angles_deg_from_pq(val_P_true, val_Q_true)
                 ang_pred = evaluator._angles_deg_from_pq(val_P_pred, val_Q_pred)
                 fig = evaluator.plot_phase_angle_halfnormal_quantile_errors(ang_true, ang_pred, "Phase Angle of S (Test)")
+                if save_dir and fig is not None:
+                    os.makedirs(save_dir, exist_ok=True)
+                    fig_path = os.path.join(save_dir, "S_13_phase_angle_halfnormal_quantile_errors.png")
+                    fig.savefig(fig_path, dpi=150, bbox_inches='tight')
                 # Best effort show
                 try:
                     import matplotlib.pyplot as _plt  # type: ignore
@@ -2307,7 +2314,9 @@ class TransformerTrainer:
             y_train_true=None,
             y_train_pred=None,
             no_plots=False,
-            base_agg_hours=int(self.cfg.agg_hours)
+            base_agg_hours=int(self.cfg.agg_hours),
+            save_dir=save_dir,
+            target_name=target_cols[0] if target_cols else None
         )
 
     def evaluate_on_test_mdape(self, test_data_cfg: Dict[str, Any], n_bldng_lim: Optional[int] = None) -> Dict[str, Any]:

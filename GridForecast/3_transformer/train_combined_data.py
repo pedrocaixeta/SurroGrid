@@ -1,3 +1,8 @@
+"""
+This script trains the Transformer-based time series forecasting model on the combined train + validation data.
+At the end, it performs an evaluation of this model considering the test data
+"""
+
 import subprocess, sys
 
 # Ensure required dependencies are installed in the container environment before importing project modules
@@ -98,15 +103,18 @@ print('Train batches:', len(transformer_trainer.train_loader), ', Val batches:',
 print('Input dims ->', transformer_trainer.cfg.in_features, ', Output dims ->', transformer_trainer.cfg.out_features)
 
 # 2. Train on combined train + validation data
-transformer_trainer.train_on_trainval(epochs=38)
+transformer_trainer.train_on_trainval(epochs=38) #returns a dictionary with the information of epochs and the final loss
 
-# 3. Save best model
+# 3. Save model
+model_name = "baseline_mae_maex_oldHPO"
 models_dir = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/models"
-os.makedirs(models_dir, exist_ok=True)
-ckpt_path = os.path.join(models_dir, "baseline_mae_maex_oldHPO.pt")
+model_dir = os.path.join(models_dir, model_name)
+os.makedirs(model_dir, exist_ok=True)
+
+ckpt_path = os.path.join(model_dir, f"{model_name}.pt")
 transformer_trainer.save(ckpt_path, use_best=True)
 print(f"Model saved to: {ckpt_path}")
 
-# 4. Evaluate metrics with best weights on test set
-test_results = transformer_trainer.evaluate_on_test_with_plots(test_data_cfg)
+# 4. Evaluate metrics with best weights on test set and save plots
+test_results = transformer_trainer.evaluate_on_test_with_plots(test_data_cfg, save_dir=model_dir)
 print("Test results:", test_results)
