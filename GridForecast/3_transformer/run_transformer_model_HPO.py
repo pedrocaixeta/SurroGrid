@@ -52,6 +52,9 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Device:', device)
 
+    if torch.cuda.is_available(): # Enable TensorFloat-32 (TF32), so that matrix multiplications happens in faster cores. This provides a 2x-3x speedup on matrix multiplications and attention operations
+        torch.set_float32_matmul_precision('high')
+
     import importlib, math
     import transformer_model
     import ray

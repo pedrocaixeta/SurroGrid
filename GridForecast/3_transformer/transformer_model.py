@@ -712,6 +712,9 @@ class TransformerTrainer:
         cfg_kwargs = {k: v for k, v in config.items() if k in TransformerConfig.__dataclass_fields__}
         self.cfg = TransformerConfig(**cfg_kwargs)  # type: ignore[arg-type]
         self.device = torch.device(self.cfg.device)
+        # Enable TensorFloat-32 (TF32) on Ampere/Hopper Tensor Cores. When ran in this cores, the matrix operations are 2x-3x faster
+        if torch.cuda.is_available() and self.device.type == 'cuda':
+            torch.set_float32_matmul_precision('high')
         self.epoch = 0
         self.best_val_loss = float('inf')
         self.best_state = None
