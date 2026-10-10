@@ -730,7 +730,16 @@ class TransformerTrainer:
         self.model = TransformerForecastModel(self.cfg).to(self.device)
         if self.cfg.compile_model and hasattr(torch, 'compile'):  # PyTorch 2.0+
             try:
-                self.model = torch.compile(self.model)  # type: ignore
+                # torch.compile's inductor backend requires CUDA capability >= 7.5; older GPUs like V100 (sm_70) trigger "no kernel image" at runtime.
+                # So this block checks the GPU capability and skips torch.compile if it's not supported, which negatively impacts the run time
+                _can_compile = True
+                if self.device.type == 'cuda':
+                    major, minor = torch.cuda.get_device_capability(self.device)
+                    if (major, minor) < (7, 5):
+                        _can_compile = False
+                        print(f"[INFO] Skipping torch.compile: GPU capability {major}.{minor} < 7.5")
+                if _can_compile:
+                    self.model = torch.compile(self.model)  # type: ignore
             except Exception:  # pragma: no cover
                 pass
         self._setup_optim()
