@@ -35,14 +35,10 @@ Ray Tune usage:
 # Environment safety knobs (must run BEFORE importing torch)
 # - PYTORCH_NVML_DISABLE=1 prevents allocator NVML queries that can assert
 #   in some container/driver combos (e.g., under Ray workers or enroot).
-# - PYTORCH_CUDA_ALLOC_CONF=backend:cudaMallocAsync enables the modern
-#   async allocator, which pairs well with NVML disabled and reduces
-#   fragmentation. These are no-ops on CPU-only runs.
 # ---------------------------------------------------------------------------
 try:  # keep import-time side effects minimal and safe
      import os as _os  # type: ignore
      _os.environ.setdefault("PYTORCH_NVML_DISABLE", "1")
-     _os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "backend:cudaMallocAsync")
 except Exception:
      pass
 
