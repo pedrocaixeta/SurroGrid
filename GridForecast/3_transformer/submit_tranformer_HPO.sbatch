@@ -2,13 +2,13 @@
 #SBATCH --job-name=mlp_hpo
 #SBATCH --output=logs/out/%x-%j.out
 #SBATCH --error=logs/error/%x-%j.err
-#SBATCH --time=04:00:00
-#SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8,lrz-v100x2,lrz-dgx-1-v100x8
+#SBATCH --time=4:00:00 #A safe one would be 16
+#SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8,lrz-dgx-1-v100x8
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=14
-#SBATCH --gres=gpu:1
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=56
+#SBATCH --gres=gpu:4
+#SBATCH --mem=256G
 
 # Positional parameters with defaults:
 #   $1 -> agg_hours (default: 1)

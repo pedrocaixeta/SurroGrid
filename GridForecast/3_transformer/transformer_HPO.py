@@ -19,9 +19,32 @@ import sys
 import os
 import argparse
 
-def install(package):
-    """Install a Python package into the current interpreter environment."""
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+def ensure_packages(packages):
+    """Ensure required packages are installed in the current environment in a single pass.
+
+    Checks which packages are missing before calling pip, avoiding redundant installs.
+    Uses pip's cache directory to avoid re-downloading wheels across jobs.
+    """
+    module_map = {
+        "tables": "tables",
+        "ray": "ray",
+        "tensorboardX": "tensorboardX",
+        "optuna": "optuna",
+        "vmdpy": "vmdpy",
+    }
+    missing = []
+    for pkg in packages:
+        mod_name = module_map.get(pkg, pkg)
+        try:
+            __import__(mod_name)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        print(f"Installing missing dependencies via pip in a single pass: {missing}")
+        cache_dir = os.path.join(os.getcwd(), ".cache", "pip")
+        pip_cmd = [sys.executable, "-m", "pip", "install", "--no-input", "--cache-dir", cache_dir]
+        pip_cmd.extend(missing)
+        subprocess.check_call(pip_cmd)
 	
 def parse_args():
     """Parse command line arguments controlling aggregation and loss."""
@@ -70,14 +93,8 @@ def main():
 
 ###########################################################################################
 
-    install("tables")
-    install("ray")
-    install("ipywidgets")
-    install("tensorboard")
-    install("tensorboardX")
-    install("optuna")
-    install("vmdpy")
-    install("seaborn")
+    # Ensure all required packages are present in a single batched check/install
+    ensure_packages(["tables", "ray", "tensorboardX", "optuna", "vmdpy"])
 
     cwd = os.getcwd()
     print(cwd)
@@ -103,13 +120,13 @@ def main():
     from optuna.samplers import TPESampler
 
 
-    # Compute resources
+    # Compute resources: 4 GPUs, 56 CPUs (14 CPUs + 1 GPU per trial, 4 trials running concurrently)
     STORAGE_ROOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/ray_tune/"
-    n_cpus_total = 14 #48
-    n_gpus_total = 1
-    max_concurrent = 1
-    n_cpus_task = n_cpus_total/max_concurrent
-    n_gpus_task = n_gpus_total/max_concurrent
+    n_cpus_total = 56
+    n_gpus_total = 4
+    max_concurrent = 4
+    n_cpus_task = n_cpus_total / max_concurrent
+    n_gpus_task = n_gpus_total / max_concurrent
 
     #
     num_samples = 153
@@ -150,7 +167,7 @@ def main():
             'VMD_COLS': vmd_cols,
             # Explore different numbers of VMD modes
             'VMD_K_MODES': tune.choice([0, 1, 2, 3, 4]),
-            'VMD_APPROACH': 'read',a
+            'VMD_APPROACH': 'read'
         },
     })
 

@@ -1372,6 +1372,9 @@ class TransformerTrainer:
                 ### Forward pass
                 pred = self.model(xb)
                 loss = self._compute_loss(pred, yb, extras)
+                if train and (torch.isnan(loss) or torch.isinf(loss)):
+                    # Abort immediately if loss diverged to NaN/Inf to save compute
+                    return float('nan')
 
                 ### If all metrics due, collect full validation series reconstruction data
                 if (not train) and collect_for_metrics:
@@ -1438,15 +1441,19 @@ class TransformerTrainer:
         ### Run one training epoch + one validation epoch
         collect_full = bool(self.cfg.full_metrics_every) and ((self.epoch + 1) % max(1, int(self.cfg.full_metrics_every)) == 0)
         train_loss = self._run_epoch(train=True)
-        val_epoch_out = self._run_epoch(train=False, collect_for_metrics=collect_full)
-
-        ### Extract metrics
-        if isinstance(val_epoch_out, tuple):
-            val_loss, y_true_orig, y_pred_orig = val_epoch_out
-        else:
-            val_loss = val_epoch_out
+        if math.isnan(train_loss) or math.isinf(train_loss):
+            val_loss = float('nan')
             y_true_orig = None
             y_pred_orig = None
+        else:
+            val_epoch_out = self._run_epoch(train=False, collect_for_metrics=collect_full)
+            ### Extract metrics
+            if isinstance(val_epoch_out, tuple):
+                val_loss, y_true_orig, y_pred_orig = val_epoch_out
+            else:
+                val_loss = val_epoch_out
+                y_true_orig = None
+                y_pred_orig = None
 
         ### Process metrics
         if val_loss < self.best_val_loss:
