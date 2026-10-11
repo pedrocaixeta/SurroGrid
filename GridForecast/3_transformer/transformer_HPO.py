@@ -129,7 +129,7 @@ def main():
     n_gpus_task = n_gpus_total / max_concurrent
 
     #
-    num_samples = 153
+    num_samples = 51
     max_epochs = 45
     grace_period = 5      # minimum number of epochs (= lowest rung) to be run before ASHA curtails
     n_startup_trials = 23 # free dimensions d+1
