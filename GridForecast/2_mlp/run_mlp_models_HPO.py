@@ -56,7 +56,7 @@ def main():
         'key_X': 'X',
         'key_y': 'y',
         'train_grids': 'all',
-        'test_ratio': 0.2,
+        'validation_ratio': 0.2,
         'random_state': 42,
         'X_BASE_COLS': [
             'T', 'demand_net_active_pre',

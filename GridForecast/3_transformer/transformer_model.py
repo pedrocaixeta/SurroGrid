@@ -1040,7 +1040,11 @@ class TransformerTrainer:
         key_X = data_cfg["key_X"]
         key_y = data_cfg["key_y"]
         train_grids = data_cfg["train_grids"]
-        test_ratio = float(data_cfg["test_ratio"])
+        try:
+            validation_ratio = float(data_cfg["validation_ratio"])
+        except KeyError:
+            # Fall back to 'test_ratio' (previous identifier for this variable) or default to 0.2 - In case we are processing older models
+            validation_ratio = float(data_cfg.get("test_ratio", 0.2))
         random_state = int(data_cfg["random_state"])
         agg = int(self.cfg.agg_hours)
 
@@ -1060,7 +1064,7 @@ class TransformerTrainer:
             raise ValueError("Need at least 2 grids for train/val split")
         rng = random.Random(random_state)
         rng.shuffle(unique_grids)
-        n_val = max(1, int(len(unique_grids) * test_ratio))
+        n_val = max(1, int(len(unique_grids) * validation_ratio))
         val_grids = set(unique_grids[:n_val])
         train_grids_all = set(unique_grids[n_val:])
 
@@ -2680,7 +2684,7 @@ def build_tune_search_space(tune):
             'key_X': 'X',
             'key_y': 'y',
             'train_grids': 'all',
-            'test_ratio': 0.2,
+            'validation_ratio': 0.2,
             'random_state': 42,
             'X_BASE_COLS': [
                 #'T', 

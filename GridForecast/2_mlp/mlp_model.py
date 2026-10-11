@@ -36,24 +36,24 @@ from evaluation import EvaluationMetrics
 
 # ========================= Preprocessor (no VMD) =========================
 class Preprocessor:
-        """Feature/target preprocessing for the MLP baseline.
+    r"""Feature/target preprocessing for the MLP baseline.
 
-        Responsibilities:
-            - Select base feature columns (`X_BASE_COLS`) from the raw `X` table.
-            - Add feature engineering:
-                    * zero-indicator columns for selected features
-                    * log1p for selected features
-                    * seasonal sin/cos terms derived from the `hour` index level
-            - Scale X features using `StandardScaler`.
-            - Scale y targets.
+    Responsibilities:
+        - Select base feature columns (`X_BASE_COLS`) from the raw `X` table.
+        - Add feature engineering:
+            * zero-indicator columns for selected features
+            * log1p for selected features
+            * seasonal sin/cos terms derived from the `hour` index level
+        - Scale X features using `StandardScaler`.
+        - Scale y targets.
 
-        Dual-target behavior (P/Q):
-            If `TARGET_COLS` has length 2, scaling is learned from apparent power
-            $S=\sqrt{P^2+Q^2}$ and then applied to both channels.
-        """
+    Dual-target behavior (P/Q):
+        If `TARGET_COLS` has length 2, scaling is learned from apparent power
+        $S=\sqrt{P^2+Q^2}$ and then applied to both channels.
+    """
 
     def __init__(self, data_cfg: Dict[str, Any]):
-                """Create a Preprocessor from a data configuration dict."""
+        """Create a Preprocessor from a data configuration dict."""
         self.X_BASE_COLS: List[str] = list(data_cfg["X_BASE_COLS"])  # mandatory
         self.TARGET_COLS: List[str] = list(data_cfg["TARGET_COLS"])  # mandatory (len 1 or 2)
         self.ZERO_BASE_FEATURES: List[str] = list(data_cfg.get("ZERO_BASE_FEATURES", []))
@@ -294,7 +294,11 @@ class MLPTrainer(Trainable):  # pragma: no cover
         key_X = data_cfg.get('key_X', 'X')
         key_y = data_cfg.get('key_y', 'y')
         train_grids = data_cfg.get('train_grids', 'all')
-        test_ratio = float(data_cfg.get('test_ratio', 0.2))
+        try:
+            validation_ratio = float(data_cfg["validation_ratio"])
+        except KeyError:
+            # Fall back to 'test_ratio' (previous identifier for this variable) or default to 0.2 - In case we are processing older models
+            validation_ratio = float(data_cfg.get("test_ratio", 0.2))
         random_state = int(data_cfg.get('random_state', 42))
         if not hdf_path or not os.path.exists(str(hdf_path)):
             raise FileNotFoundError(f"HDF data file not found: {hdf_path}")
@@ -316,7 +320,7 @@ class MLPTrainer(Trainable):  # pragma: no cover
         rng = np.random.default_rng(seed=random_state)
         grids = np.array(X_df.index.get_level_values(0).unique())
         rng.shuffle(grids)
-        n_val = max(1, int(round(test_ratio * len(grids))))
+        n_val = max(1, int(round(validation_ratio * len(grids))))
         val_grids = set(grids[:n_val].tolist())
         train_grids_all = set(grids[n_val:].tolist())
         if train_grids not in (None, 'all'):

@@ -23,31 +23,61 @@ if torch.cuda.is_available():
     torch.set_float32_matmul_precision('high')
 
 
+##################### SETTINGS #####################
+directory_with_data = '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/'
+loss_function = 'mae_maex' # 'mae_maex' | 'alpha_peak'
+transformer_approach = 'baseline' # 'baseline' | 'mobility' | 'small_grids'
+model_name = str(transformer_approach) + '_' + str(loss_function) + '_oldHPO'
+###################################################
+
+common_features_for_all_approaches = [# Grouped according to Table 3.2 in Elias' Thesis
+    'demand_net_active_pre', 'heat_water', 'heat_space', 'cop_avg', 'PV_prod_expected', #Cheap Ground Truth
+    'regiostar7', 'n_cars', #'T' #Mobility proxies
+    'n_lines', 'tot_R_grid', #Power Flow Proxies
+    'n_pure_res_buildings', 'n_pure_nonres_buildings', 'n_mixed_buildings', #Disaggregation - Number of each building type                                     
+    'res_bldng_area_base_sum', 'nonres_bldng_area_base_sum', 'mixed_bldng_area_base_sum', #Disaggregation - Sum of floor area of each building type
+    'bldng_area_floors_sum', 'n_flats', 'n_occ'] #Disaggregation - Other building characteristics
+    # 'mobility', 'mob_avail', 'mob_last_avail'] # Mobility Ground Truth
+
+common_vmd_col = ["demand_net_active_pre", "heat_water", "heat_space", "cop_avg", "PV_prod_expected"]
+      
+
+if transformer_approach == 'baseline':
+    Path_to_training_data = directory_with_data + 'ts_train.h5'
+    Path_to_TEST_data = directory_with_data + 'ts_test.h5'
+    features = common_features_for_all_approaches + ['T']
+    vmd_cols = common_vmd_col + ["T"]
+
+elif transformer_approach == 'mobility':
+    Path_to_training_data = directory_with_data + 'ts_train.h5'
+    Path_to_TEST_data = directory_with_data + 'ts_test.h5'
+    features = common_features_for_all_approaches + ['mobility', 'mob_avail', 'mob_last_avail']
+    vmd_cols = common_vmd_col + ['mobility', 'mob_avail', 'mob_last_avail']
+
+elif transformer_approach == 'small_grids':
+    Path_to_training_data = directory_with_data + 'ts_train_large_grids.h5'
+    Path_to_TEST_data = directory_with_data + 'ts_test_large_grids.h5'
+    features = common_features_for_all_approaches + ['mobility', 'mob_avail', 'mob_last_avail']
+    vmd_cols = common_vmd_col + ['mobility', 'mob_avail', 'mob_last_avail']
+
+
+
 
 manual_cfg = {
     # Preprocessing settings
     '_data': {
-        'hdf_data_path': '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/ts_train.h5',
+        'hdf_data_path': Path_to_training_data,
         'key_X': "X",
         'key_y': "y",
         'train_grids': "all",
-        'test_ratio': 0.2,
+        'validation_ratio': 0.2, # validation split ratio applied to grids in ts_train.h5
         'random_state': 42,
-        'X_BASE_COLS':        ['T',
-                               'demand_net_active_pre',
-                               'heat_water', 
-                               'heat_space', 
-                               'cop_avg',
-                               'PV_prod_expected',
-                               'res_bldng_area_base_sum', 'nonres_bldng_area_base_sum', 'mixed_bldng_area_base_sum', 'bldng_area_floors_sum',
-                               'n_cars', 'n_pure_res_buildings', 'n_pure_nonres_buildings', 'n_mixed_buildings', 'n_flats', 'n_occ',
-                               'n_lines', 'tot_R_grid', 'regiostar7',
-                              ],
+        'X_BASE_COLS': features,
         'TARGET_COLS':        ["demand_net_active_post", "demand_net_reactive_post"],
         'ZERO_BASE_FEATURES': [],
         'LOG1P_COLS':         ["n_lines", "tot_R_grid"],
         'TS_PERIODS':         [8760, 168, 24, 12],
-        'VMD_COLS':           ["demand_net_active_pre", "heat_water", "heat_space", "cop_avg", "PV_prod_expected", "T"],
+        'VMD_COLS':           vmd_cols,
         'VMD_K_MODES':         2,
         'VMD_APPROACH':        "read",  # None | read | write
     },
@@ -80,7 +110,7 @@ manual_cfg = {
     'epochs': 38,
     'batch_size': 128,
     'grad_clip': 0,
-    'loss_type': 'mae_maex',  # try: 'mae_maex', 'alpha_peak'
+    'loss_type': loss_function,  #'mae_maex', 'alpha_peak'
     'multi_target_lambda': 1,
     'patience': 3,
     # reporting and Others
@@ -92,7 +122,7 @@ manual_cfg = {
 }
 
 test_data_cfg = {
-    'hdf_data_path': '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/ts_test.h5',
+    'hdf_data_path': Path_to_TEST_data,
     'key_X': 'X',
     'key_y': 'y',
 }
@@ -103,10 +133,10 @@ print('Train batches:', len(transformer_trainer.train_loader), ', Val batches:',
 print('Input dims ->', transformer_trainer.cfg.in_features, ', Output dims ->', transformer_trainer.cfg.out_features)
 
 # 2. Train on combined train + validation data
-transformer_trainer.train_on_trainval(epochs=38) #returns a dictionary with the information of epochs and the final loss
+#returns a dictionary with the information of epochs and the final loss
+transformer_trainer.train_on_trainval(epochs=int(round( manual_cfg['epochs']*(1.0 - manual_cfg['_data']['validation_ratio'] )))) #Assumming that manual_cfg['epochs'] is the optimal number of epochs outputted from the HPO (without validation data)
 
 # 3. Save model
-model_name = "baseline_mae_maex_oldHPO"
 models_dir = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/models"
 model_dir = os.path.join(models_dir, model_name)
 os.makedirs(model_dir, exist_ok=True)
