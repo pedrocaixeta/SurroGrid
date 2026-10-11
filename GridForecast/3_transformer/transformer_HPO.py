@@ -66,6 +66,7 @@ def main():
     from ray.tune.search.optuna import OptunaSearch
     from optuna.samplers import TPESampler
 
+
     # Compute resources
     STORAGE_ROOT = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/ray_tune/"
     n_cpus_total = 14 #48
@@ -96,7 +97,7 @@ def main():
             'key_X': 'X',
             'key_y': 'y',
             'train_grids': 'all',
-            'test_ratio': 0.2,
+            'validation_ratio': 0.2,
             'random_state': 42,
             'X_BASE_COLS': [
                 'T', 
