@@ -2,7 +2,7 @@
 #SBATCH --job-name=mlp_hpo
 #SBATCH --output=logs/out/%x-%j.out
 #SBATCH --error=logs/error/%x-%j.err
-#SBATCH --time=6:00:00 #A safe one would be 16
+#SBATCH --time=10:00:00 #A safe one would be 16
 #SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
