@@ -148,3 +148,8 @@ print(f"Model saved to: {ckpt_path}")
 # 4. Evaluate metrics with best weights on test set and save plots
 test_results = transformer_trainer.evaluate_on_test_with_plots(test_data_cfg, save_dir=model_dir)
 print("Test results:", test_results)
+
+# 5. Evaluate MdAPE metrics and percentile spreads for Table 4.1 (Elias's Thesis)
+print("\n" + "="*50)
+print("Evaluating MdAPE metrics on test set (Table 4.1 format)...")
+mdape_results = transformer_trainer.evaluate_on_test_mdape(test_data_cfg)
