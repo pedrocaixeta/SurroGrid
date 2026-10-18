@@ -25,9 +25,9 @@ if torch.cuda.is_available():
 
 ##################### SETTINGS #####################
 directory_with_data = '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/'
-loss_function = 'alpha_peak' # 'mae_maex' | 'alpha_peak'
+loss_function = 'mae_max' # 'mae_maex' | 'alpha_peak'
 transformer_approach = 'baseline' # 'baseline' | 'mobility' | 'small_grids'
-model_name = str(transformer_approach) + '_' + str(loss_function) + '_HPOfromOct17th'
+model_name = str(transformer_approach) + '_' + str(loss_function) + '_HPOfromOct15th'
 ###################################################
 
 common_features_for_all_approaches = [# Grouped according to Table 3.2 in Elias' Thesis
@@ -76,23 +76,23 @@ manual_cfg = {
         'TARGET_COLS':        ["demand_net_active_post", "demand_net_reactive_post"],
         'ZERO_BASE_FEATURES': [],
         'LOG1P_COLS':         ["n_lines", "tot_R_grid"],
-        'TS_PERIODS':         [8760, 168, 24],
+        'TS_PERIODS':         [8760, 168, 24, 12],
         'VMD_COLS':           vmd_cols,
-        'VMD_K_MODES':         4,
+        'VMD_K_MODES':         3,
         'VMD_APPROACH':        "read",  # None | read | write
     },
     # Model / architecture
-    'input_mlp_layers': 3,
+    'input_mlp_layers': 2,
     'input_mlp_hidden': 128,
-    'input_dropout': 0.0165369,
-    'output_mlp_layers': 3,
+    'input_dropout': 0.0518586,
+    'output_mlp_layers': 1,
     'output_mlp_hidden': 512,
-    'output_dropout': 0.248517,
+    'output_dropout': 0.114268,
     'd_model': 256,
     'num_heads': 8,
     'ff_dim': 1024,
-    'attn_dropout':  0.0576261,
-    'ffn_dropout':  0.0576261,
+    'attn_dropout':  0.0594138,
+    'ffn_dropout':  0.0531122,
     'num_transformer_layers': 1,
     'activation': 'gelu',
     # Aggregation settings
@@ -102,12 +102,12 @@ manual_cfg = {
     "conv_padding": 6,
     'agg_hours': 1,
     # Training
-    'learning_rate': 0.000376448,
-    'weight_decay':  0.0379529,
+    'learning_rate': 0.000236578,
+    'weight_decay':  0.00830902,
     'optimizer': 'adamw',
     'scheduler': 'cosine',
     'scheduler_epochs': 45,
-    'epochs': 42,
+    'epochs': 43,
     'batch_size': 128,
     'grad_clip': 0,
     'loss_type': loss_function,  #'mae_maex', 'alpha_peak'
