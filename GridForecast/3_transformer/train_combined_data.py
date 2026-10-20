@@ -25,7 +25,7 @@ if torch.cuda.is_available():
 
 ##################### SETTINGS #####################
 directory_with_data = '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0_preprocessing/Data/'
-loss_function = 'mae_max' # 'mae_maex' | 'alpha_peak'
+loss_function = 'mae_maex' # 'mae_maex' | 'alpha_peak'
 transformer_approach = 'baseline' # 'baseline' | 'mobility' | 'small_grids'
 model_name = str(transformer_approach) + '_' + str(loss_function) + '_HPOfromOct15th'
 ###################################################
