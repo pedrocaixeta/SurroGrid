@@ -406,6 +406,7 @@ def plot_figure_4_1(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_labe
     
     p_series_list = []
     q_series_list = []
+    grid_file_names = {}
     processed_count = 0
     
     # Loop through each scenario file and load active/reactive power time-series
@@ -425,6 +426,7 @@ def plot_figure_4_1(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_labe
                     
                     p_series_list.append(pd.Series(p_kw, index=index))
                     q_series_list.append(pd.Series(q_kvar, index=index))
+                    grid_file_names[i] = os.path.basename(filepath)
                     processed_count += 1
         except Exception as e:
             print(f"Failed to read {filepath}: {e}")
@@ -442,15 +444,23 @@ def plot_figure_4_1(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_labe
     # Apparent power formula: S = sqrt(P^2 + Q^2)
     S = np.sqrt(P**2 + Q**2)
     
-    grids = np.arange(processed_count)
-    
     # Annual mean apparent power per grid for timeseries normalization
     mean_S_per_grid = S.groupby(level='batch').mean()
+    mean_S_across_grids = mean_S_per_grid.mean()
+    grids = mean_S_per_grid.index.to_numpy()
     
     # Average maximum apparent power over all grids for Load Duration Curve (LDC) normalization
     max_S_per_grid = S.groupby(level='batch').max()
     norm_ldc_constant = max_S_per_grid.mean()
-    print(f"Apparent power LDC normalization constant (mean of grid max S): {norm_ldc_constant:.2f} kVA")
+    print(f"Mean of per-grid mean |S| (timeseries normalization summary): {mean_S_across_grids:.2f} kVA")
+    print(f"Mean of per-grid max |S| (LDC normalization): {norm_ldc_constant:.2f} kVA")
+    print("Per-grid apparent power statistics:")
+    for grid in mean_S_per_grid.index:
+        grid_name = grid_file_names.get(grid, f"grid {grid}")
+        print(
+            f"  {grid_name}: mean |S| = {mean_S_per_grid.loc[grid]:.2f} kVA, "
+            f"max |S| = {max_S_per_grid.loc[grid]:.2f} kVA"
+        )
     
     # Setup daily aggregation timeline
     daily_time = pd.date_range(start='2024-01-01', periods=365, freq='D')
@@ -520,6 +530,14 @@ def plot_figure_4_1(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_labe
         ax_ts.set_title(f"Net Transformer {r_title}")
         ax_ts.grid(True, alpha=0.3)
         ax_ts.legend(loc='upper right')
+        if key == 'S':
+            ax_ts.text(
+                0.02, 0.97,
+                f"Mean of grid mean |S|: {mean_S_across_grids:.2f} kVA",
+                transform=ax_ts.transAxes,
+                ha='left', va='top', fontsize=9,
+                bbox=dict(facecolor='white', alpha=0.85, edgecolor='lightgray')
+            )
         
         # Load Duration Curve plot (Column 1)
         ax_ldc = axes[r_idx, 1]
@@ -538,6 +556,14 @@ def plot_figure_4_1(pwrflw_dir, out_dir, preurbs, file_suffix, colors, case_labe
         ax_ldc.set_title(f"Net Transformer {r_title}")
         ax_ldc.grid(True, alpha=0.3)
         ax_ldc.legend(loc='upper right')
+        if key == 'S':
+            ax_ldc.text(
+                0.02, 0.97,
+                f"Mean of grid max |S|: {norm_ldc_constant:.2f} kVA",
+                transform=ax_ldc.transAxes,
+                ha='left', va='top', fontsize=9,
+                bbox=dict(facecolor='white', alpha=0.85, edgecolor='lightgray')
+            )
         
     # Save the plot
     os.makedirs(out_dir, exist_ok=True)
