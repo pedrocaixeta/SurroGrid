@@ -2423,31 +2423,18 @@ class TransformerTrainer:
             ):
                 out[name] = evaluator.evaluate_mdape(yt, yp, base_agg_hours=int(self.cfg.agg_hours), skip_feedin=(name=="S"))
             # Pretty print similar to run_model_evaluation
-            try:
-                dfP = pd.DataFrame(out.get('P', {}), index=['Test']).T if 'P' in out else None
-                dfQ = pd.DataFrame(out.get('Q', {}), index=['Test']).T if 'Q' in out else None
-                dfS = pd.DataFrame(out.get('S', {}), index=['Test']).T if 'S' in out else None
-                print("MdAPE Metric Results (Test):")
-                if dfP is not None:
-                    print("P:")
-                    print(dfP)
-                if dfQ is not None:
-                    print("Q:")
-                    print(dfQ)
-                if dfS is not None:
-                    print("S:")
-                    print(dfS)
-            except Exception:
-                pass
+            print("MdAPE Metric Results (Test):")
+            for name in ("P", "Q", "S"):
+                if name in out:
+                    print(f"{name}:")
+                    frame = pd.DataFrame(out[name], index=["Test"]).T
+                    print(frame.to_string(max_rows=None, max_cols=None))
             return out
         else:
             metrics = evaluator.evaluate_mdape(y_true, y_pred, base_agg_hours=int(self.cfg.agg_hours))
-            try:
-                df = pd.DataFrame(metrics, index=['Test']).T
-                print("MdAPE Metric Results (Test):")
-                print(df)
-            except Exception:
-                pass
+            df = pd.DataFrame(metrics, index=["Test"]).T
+            print("MdAPE Metric Results (Test):")
+            print(df.to_string(max_rows=None, max_cols=None))
             return {'target': metrics}
 
     # ---------------------------------------------------------------------

@@ -130,7 +130,7 @@ test_data_cfg = {
 # 1. Initialize trainer
 transformer_trainer = TransformerTrainer(manual_cfg) #creates an instance of the class TransformerTrainer
 print('Train batches:', len(transformer_trainer.train_loader), ', Val batches:', len(transformer_trainer.val_loader))
-print('Input dims ->', transformer_trainer.cfg.in_features, ', Output dims ->', transformer_trai/ner.cfg.out_features)
+print('Input dims ->', transformer_trainer.cfg.in_features, ', Output dims ->', transformer_trainer.cfg.out_features)
 
 # 2. Train on combined train + validation data
 #returns a dictionary with the information of epochs and the final loss
@@ -153,3 +153,53 @@ print("Test results:", test_results)
 print("\n" + "="*50)
 print("Evaluating MdAPE metrics on test set (Table 4.1 format)...")
 mdape_results = transformer_trainer.evaluate_on_test_mdape(test_data_cfg)
+
+table41_rows = {
+    "P": [
+        ("Agg. Feed-In MdAPE [%]", "Agg. Feed-In MdAPE", "Agg. Feed-In MdAPE +(p95-MdAPE)", "Agg. Feed-In MdAPE -(MdAPE-p5)", 100.0),
+        ("Agg. Import MdAPE [%]", "Agg. Import MdAPE", "Agg. Import MdAPE +(p95-MdAPE)", "Agg. Import MdAPE -(MdAPE-p5)", 100.0),
+        ("Median NMAE [%]", "MA(E/MAEx) Md (1h)", "MA(E/MAEx) Md +(p95-Md) (1h)", "MA(E/MAEx) Md -(Md-p5) (1h)", 100.0),
+        ("Peak Feed-In MdAPE [%]", "Peak Feed-In MdAPE (1h)", "Peak Feed-In MdAPE +(p95-MdAPE) (1h)", "Peak Feed-In MdAPE -(MdAPE-p5) (1h)", 100.0),
+        ("Peak Feed-In Median Δt [d]", "Peak Feed-In Median Δt (1h)", "Peak Feed-In Median Δt +(p95-Md) (1h)", "Peak Feed-In Median Δt -(Md-p5) (1h)", 1.0 / 24.0),
+        ("Peak Import MdAPE [%]", "Peak Import MdAPE (1h)", "Peak Import MdAPE +(p95-MdAPE) (1h)", "Peak Import MdAPE -(MdAPE-p5) (1h)", 100.0),
+        ("Peak Import Median Δt [d]", "Peak Import Median Δt (1h)", "Peak Import Median Δt +(p95-Md) (1h)", "Peak Import Median Δt -(Md-p5) (1h)", 1.0 / 24.0),
+    ],
+    "Q": [
+        ("Agg. Feed-In MdAPE [%]", "Agg. Feed-In MdAPE", "Agg. Feed-In MdAPE +(p95-MdAPE)", "Agg. Feed-In MdAPE -(MdAPE-p5)", 100.0),
+        ("Median NMAE [%]", "MA(E/MAEx) Md (1h)", "MA(E/MAEx) Md +(p95-Md) (1h)", "MA(E/MAEx) Md -(Md-p5) (1h)", 100.0),
+        ("Peak Import MdAPE [%]", "Peak Import MdAPE (1h)", "Peak Import MdAPE +(p95-MdAPE) (1h)", "Peak Import MdAPE -(MdAPE-p5) (1h)", 100.0),
+    ],
+    "S": [
+        ("Agg. Load MdAPE [%]", "Agg. Import MdAPE", "Agg. Import MdAPE +(p95-MdAPE)", "Agg. Import MdAPE -(MdAPE-p5)", 100.0),
+        ("Median NMAE [%]", "MA(E/MAEx) Md (1h)", "MA(E/MAEx) Md +(p95-Md) (1h)", "MA(E/MAEx) Md -(Md-p5) (1h)", 100.0),
+        ("Peak Load MdAPE [%]", "Peak Import MdAPE (1h)", "Peak Import MdAPE +(p95-MdAPE) (1h)", "Peak Import MdAPE -(MdAPE-p5) (1h)", 100.0),
+        ("Peak Load Median Δt [d]", "Peak Import Median Δt (1h)", "Peak Import Median Δt +(p95-Md) (1h)", "Peak Import Median Δt -(Md-p5) (1h)", 1.0 / 24.0),
+    ],
+}
+
+def format_table41_value(metrics, key, scale):
+    value = metrics.get(key)
+    if value is None or not math.isfinite(float(value)):
+        return ""
+    return f"{float(value) * scale:.4f}".replace(".", ",")
+
+
+table41_report = ["Table 4.1 results (tab-separated; decimal comma)"]
+for target_name, metric_rows in table41_rows.items():
+    display_name = "|S|" if target_name == "S" else target_name
+    table41_report.extend([
+        "",
+        display_name,
+        "Metric\tMedian\tp95 (+/-)\tp5 (+/-)",
+    ])
+    metrics = mdape_results.get(target_name, {})
+    for label, median_key, p95_key, p5_key, scale in metric_rows:
+        values = [format_table41_value(metrics, key, scale) for key in (median_key, p95_key, p5_key)]
+        table41_report.append("\t".join([label, *values]))
+
+table41_text = "\n".join(table41_report)
+print("\n" + table41_text)
+table41_path = os.path.join(model_dir, "table41_metrics.tsv")
+with open(table41_path, "w", encoding="utf-8") as report_file:
+    report_file.write(table41_text + "\n")
+print(f"Table 4.1 results saved to: {table41_path}")
