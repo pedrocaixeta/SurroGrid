@@ -28,6 +28,7 @@ directory_with_data = '/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/0
 loss_function = 'alpha_peak' # 'mae_maex' | 'alpha_peak'
 transformer_approach = 'baseline' # 'baseline' | 'mobility' | 'small_grids'
 model_name = str(transformer_approach) + '_' + str(loss_function) + '_HPOfromOct17th'
+n_epochs_to_early_stopping_point = 42
 ###################################################
 
 common_features_for_all_approaches = [# Grouped according to Table 3.2 in Elias' Thesis
@@ -107,7 +108,7 @@ manual_cfg = {
     'optimizer': 'adamw',
     'scheduler': 'cosine',
     'scheduler_epochs': 45,
-    'epochs': 42,
+    'epochs': 45, # Useless for combined training, since the number of epochs is overwriten later in the pipeline
     'batch_size': 128,
     'grad_clip': 0,
     'loss_type': loss_function,  #'mae_maex', 'alpha_peak'
@@ -134,7 +135,7 @@ print('Input dims ->', transformer_trainer.cfg.in_features, ', Output dims ->', 
 
 # 2. Train on combined train + validation data
 #returns a dictionary with the information of epochs and the final loss
-transformer_trainer.train_on_trainval(epochs=int(round( manual_cfg['epochs']*(1.0 - manual_cfg['_data']['validation_ratio'] )))) #Assumming that manual_cfg['epochs'] is the optimal number of epochs outputted from the HPO (without validation data)
+transformer_trainer.train_on_trainval(epochs=int(round( n_epochs_to_early_stopping_point*(1.0 - manual_cfg['_data']['validation_ratio'] ))))
 
 # 3. Save model
 models_dir = "/dss/dsshome1/05/go49cer2/SurroGrid_4thRUN/GridForecast/3_transformer/models"
@@ -168,6 +169,7 @@ table41_rows = {
         ("Agg. Feed-In MdAPE [%]", "Agg. Feed-In MdAPE", "Agg. Feed-In MdAPE +(p95-MdAPE)", "Agg. Feed-In MdAPE -(MdAPE-p5)", 100.0),
         ("Median NMAE [%]", "MA(E/MAEx) Md (1h)", "MA(E/MAEx) Md +(p95-Md) (1h)", "MA(E/MAEx) Md -(Md-p5) (1h)", 100.0),
         ("Peak Import MdAPE [%]", "Peak Import MdAPE (1h)", "Peak Import MdAPE +(p95-MdAPE) (1h)", "Peak Import MdAPE -(MdAPE-p5) (1h)", 100.0),
+        ("Peak Import Median Δt [d]", "Peak Import Median Δt (1h)", "Peak Import Median Δt +(p95-Md) (1h)", "Peak Import Median Δt -(Md-p5) (1h)", 1.0 / 24.0),
     ],
     "S": [
         ("Agg. Load MdAPE [%]", "Agg. Import MdAPE", "Agg. Import MdAPE +(p95-MdAPE)", "Agg. Import MdAPE -(MdAPE-p5)", 100.0),
