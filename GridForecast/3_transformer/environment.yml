@@ -1,0 +1,26 @@
+name: training
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - numpy<2
+  - pandas
+  - scikit-learn
+  - scipy
+  - matplotlib
+  - seaborn
+  - pytables
+  - h5netcdf
+  - ipykernel
+  - jupyterlab
+  - pip:
+      - h5py
+      - torch
+      - ray[tune]
+      - ipywidgets
+      - tensorboard
+      - tensorboardX
+      - optuna
+      - vmdpy
