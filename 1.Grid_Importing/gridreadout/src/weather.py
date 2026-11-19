@@ -1,0 +1,278 @@
+"""Weather data acquisition utilities.
+
+Functions in this module fetch and post-process:
+
+- PVGIS TMY hourly weather (SARAH3) for a given lat/lon
+- Open-Meteo soil temperature time series for selected months
+
+The sampling notebook stores the returned DataFrames into the grid `.h5` under
+`/raw_data/weather`.
+"""
+
+from config import config
+
+import requests
+import numpy as np
+import pandas as pd
+from datetime import timedelta, timezone
+import calendar
+import time
+
+# Shared HTTP session so sequential weather API calls reuse TCP/TLS connections
+_SESSION = requests.Session()
+
+
+def get_pvgis_tmy_sarah3_dataframe(latitude, longitude, session=None, verbose=False):
+    """
+    Retrieve TMY data from PVGIS using the SARAH3 satellite dataset and return as a pandas DataFrame
+    
+    Parameters:
+    -----------
+    latitude : float
+        Latitude in decimal degrees (between -90 and 90)
+    longitude : float
+        Longitude in decimal degrees (between -180 and 180)
+    session : requests.Session, optional
+        HTTP session for connection pooling/keep-alive (defaults to module session)
+    verbose : bool, optional
+        If True, log each PVGIS request URL call
+        
+    Returns:
+    --------
+    tuple (pandas.DataFrame, float, list) or None
+        TMY hourly DataFrame, elevation altitude, and selected months
+    """
+    # Base URL for PVGIS API
+    base_url = config.PVGIS_URL
+    http = session or _SESSION
+    
+    # Parameters for the API request
+    params = {
+        'lat': latitude,
+        'lon': longitude,
+        'raddatabase': 'PVGIS-SARAH3',
+        'outputformat': 'json',
+        'usehorizon': 1, 
+        'database': 'SARAH3',  # Specify SARAH3 dataset
+    }
+    
+    # Make the request with retries
+    if verbose:
+        print(f"Requesting TMY data from PVGIS (SARAH3) for coordinates ({latitude}, {longitude})...")
+    max_retries = 5
+    response = None
+    for attempt in range(max_retries):
+        try:
+            response = http.get(base_url, params=params, timeout=30)
+            if response.status_code == 200:
+                break
+            elif response.status_code == 429:
+                sleep_time = 5 * (attempt + 1)
+                print(f"Rate limited by PVGIS (429). Sleeping for {sleep_time}s and retrying...")
+                time.sleep(sleep_time)
+            else:
+                print(f"Error: {response.status_code}")
+                print(response.text)
+                if attempt == max_retries - 1:
+                    return None
+                time.sleep(2)
+        except Exception as e:
+            if attempt == max_retries - 1:
+                print(f"Failed to fetch PVGIS data after {max_retries} attempts: {e}")
+                raise e
+            sleep_time = 2 ** attempt
+            print(f"Connection error or timeout ({e}). Retrying in {sleep_time}s...")
+            time.sleep(sleep_time)
+
+    try:
+        # Check if the request was successful
+        if response is None or response.status_code != 200:
+            return None
+        
+        # Parse the JSON response
+        tmy_data = response.json()
+        
+        # Extract the hourly data
+        if 'outputs' not in tmy_data or 'tmy_hourly' not in tmy_data['outputs']:
+            print("Error: Unexpected API response structure")
+            print("Full response:", tmy_data)
+            return None
+            
+        hourly_data = tmy_data['outputs']['tmy_hourly']
+        offset = tmy_data['inputs']["location"]['irradiance_time_offset']
+        altitude = tmy_data['inputs']["location"]['elevation']
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(hourly_data)
+        
+
+        # Handle time column - check if it exists
+        if 'time(UTC)' in df.columns:
+            df['time(UTC)'] = pd.to_datetime(df['time(UTC)'], format="%Y%m%d:%H%M")
+            df['time(UTC)'] = df['time(UTC)'].apply(lambda x: x.replace(year=config.REF_YEAR))
+
+            # Define a fixed UTC+1 timezone (constant 1 hour ahead)
+            df['time(UTC)'] = df['time(UTC)'].dt.tz_localize(timezone.utc)
+            fixed_utc_plus_1 = timezone(timedelta(hours=config.TIME_ZONE))
+            df['time(UTC+1)'] = df['time(UTC)'].dt.tz_convert(fixed_utc_plus_1)
+            df['time(inst)'] = df['time(UTC+1)'] + pd.DateOffset(hours=offset) # actual measurement time in UTC+1
+            # df.drop(columns=["time(UTC)"], inplace=True)
+
+            # Potentially shift last row of dataset by one hour to the beginning as actually satellite instantaneous measurement time lying in next year already
+            if offset >= 0:
+                # Step 1: Extract last row
+                last_row = df.iloc[-1].copy()
+                df = df.iloc[:-1]
+                # Step 2: Subtract one year from the date
+                last_row['time(UTC+1)'] = last_row['time(UTC+1)'] - pd.DateOffset(years=1)
+                last_row['time(inst)'] = last_row['time(inst)'] - pd.DateOffset(years=1)
+                # Step 3: Append the modified row
+                df = pd.concat([df, pd.DataFrame([last_row])], ignore_index=True)
+                # Step 4: Sort by date
+                df = df.sort_values('time(inst)').reset_index(drop=True)
+
+        else:
+            print("Warning: 'time' column not found in API response")
+            
+
+        # Rename columns for clarity
+        column_mapping = {
+            'G(h)': 'ghi',                  # W/m2
+            'Gb(n)': 'dni',                 # W/m2
+            'Gd(h)': 'dhi',                 # W/m2
+            'T2m': 'temp_air',              # °C
+            'RH': 'relative_humidity',      # %
+            'SP': 'pressure',               # Pa
+            'WS10m': 'wind_speed',          # m/s
+            'WD10m': 'wind_direction'       # degrees
+        }
+        
+        # Rename only the columns that exist in the DataFrame
+        existing_columns = set(df.columns).intersection(set(column_mapping.keys()))
+        df = df.rename(columns={col: column_mapping[col] for col in existing_columns})
+        
+
+        ### Also extract selected (year, month) combinations:
+        selected_months = tmy_data["outputs"]["months_selected"]
+
+        # Return dataframe, altitude, and selected months
+        return df, altitude, selected_months
+        
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+    
+def get_open_meteo_soil_temperature(lat, lon, selected_months, session=None):
+    http = session or _SESSION
+    data_dict = {}
+    for id in range(len(selected_months)):
+        month = selected_months[id]["month"]
+        year = selected_months[id]["year"]
+
+        ### Construct start/end dates for each month
+        start = f"{year}-{month:02d}-01"
+        if month == 2: last_day = 28  # Always end on February 28
+        else: last_day = calendar.monthrange(year, month)[1]
+        end = f"{year}-{month:02d}-{last_day:02d}"
+
+        ### API call
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "start_date": start,
+            "end_date": end,
+            "hourly": "soil_temperature_100_to_255cm",
+            "timezone": config.OPENMETEO_TIME_ZONE
+        }
+        max_retries = 5
+        response = None
+        for attempt in range(max_retries):
+            try:
+                response = http.get(config.OPENMETEO_URL, params=params, timeout=30)
+                if response.status_code == 200:
+                    break
+                elif response.status_code == 429:
+                    sleep_time = 5 * (attempt + 1)
+                    print(f"Rate limited by Open-Meteo (429). Sleeping for {sleep_time}s and retrying...")
+                    time.sleep(sleep_time)
+                else:
+                    if attempt == max_retries - 1:
+                        raise ValueError(f"HTTP error {response.status_code}: {response.text}")
+                    time.sleep(2)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    print(f"Failed to fetch Open-Meteo data after {max_retries} attempts: {e}")
+                    raise e
+                sleep_time = 2 ** attempt
+                print(f"Connection error or timeout ({e}). Retrying in {sleep_time}s...")
+                time.sleep(sleep_time)
+
+        data = response.json()
+        data_dict[month] = pd.DataFrame(data["hourly"])
+
+    # Post-processing
+    monthly_data = pd.concat([dat for key, dat in data_dict.items()], axis = 0)
+    monthly_data.drop(columns=["time"], inplace=True)
+    monthly_data.reset_index(drop=True, inplace=True)
+    return monthly_data
+    
+def get_dew_point(temp_celsius, relative_humidity):
+    """
+    Calculate the dew point temperature in degrees Celsius according to Marcus-Tetens.
+
+    Parameters:
+    temp_celsius (float): Air temperature in degrees Celsius.
+    relative_humidity (float): Relative humidity in percentage (0-100).
+
+    Returns:
+    float: Dew point temperature in degrees Celsius.
+    """
+    a = 17.27
+    b = 237.7  # degrees Celsius
+
+    gamma = (a * temp_celsius) / (b + temp_celsius) + np.log(relative_humidity / 100.0)
+    dew_point = (b * gamma) / (a - gamma)
+    return dew_point
+
+
+def fetch_weather_for_location(latitude, longitude, include_soil_temp=False, session=None, verbose=False):
+    """Fetch PVGIS SARAH3 TMY weather and compute derived columns for one location.
+
+    Parameters
+    ----------
+    latitude, longitude : float
+        WGS84 coordinates in decimal degrees.
+    include_soil_temp : bool, optional
+        If True, also fetch Open-Meteo soil temperature (100-255 cm). When False
+        (default), skip Open-Meteo and populate `soil_temp` with NaN to keep the
+        HDF5 `/raw_data/weather` schema intact without hitting Open-Meteo's daily cap.
+    session : requests.Session, optional
+        Reusable HTTP session (defaults to module-level keep-alive session).
+    verbose : bool, optional
+        Whether to log individual PVGIS requests.
+
+    Returns
+    -------
+    tuple (pandas.DataFrame, float)
+        Weather time-series DataFrame and location altitude in meters.
+    """
+    res = get_pvgis_tmy_sarah3_dataframe(latitude, longitude, session=session, verbose=verbose)
+    if res is None:
+        raise RuntimeError(f"PVGIS failed to return weather data for ({latitude}, {longitude}).")
+
+    df_weather_raw, altitude, selected_months = res
+    # Add dew point temperature necessary for vehicle simulation
+    df_weather_raw["dew_point"] = get_dew_point(df_weather_raw["temp_air"], df_weather_raw["relative_humidity"])
+
+    # Soil temperature is unused by GridForecast and GSHP in GridExpand is disabled;
+    # keep the column present as float64 NaN unless explicitly requested.
+    if include_soil_temp:
+        df_weather_raw["soil_temp"] = get_open_meteo_soil_temperature(
+            latitude, longitude, selected_months, session=session
+        )
+    else:
+        df_weather_raw["soil_temp"] = np.nan
+
+    return df_weather_raw, altitude
