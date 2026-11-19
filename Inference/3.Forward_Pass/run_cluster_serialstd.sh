@@ -20,7 +20,7 @@ module list
 
 eval "$(conda shell.bash hook)"
 # Requires PyTorch (e.g., 'training' env, or 'inference' if CPU-only torch is installed there)
-conda activate training
+conda activate inference
 conda env list
 
 # Match PyTorch CPU threads to allocated SLURM CPUs
