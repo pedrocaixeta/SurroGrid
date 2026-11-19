@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J inf_dmd_alloc
+#SBATCH -J inf_feat_gen
 #SBATCH --output=logs/normal/%j_output.log
 #SBATCH --error=logs/errors/%j_error.log
 
@@ -8,8 +8,8 @@
 #SBATCH --partition=serial_std
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=0-00:11:00
-#SBATCH --mem=8G
+#SBATCH --time=0-00:05:00
+#SBATCH --mem=4G
 
 set -euo pipefail
 

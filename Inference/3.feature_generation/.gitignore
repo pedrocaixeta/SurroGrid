@@ -1,0 +1,9 @@
+# Python bytecode cache
+__pycache__/
+*.py[cod]
+
+# Ignore logs
+logs/normal/*
+!logs/normal/.gitkeep
+logs/errors/*
+!logs/errors/.gitkeep
