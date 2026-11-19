@@ -8,7 +8,7 @@
 #SBATCH --partition=serial_std
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=0-00:15:00
+#SBATCH --time=0-00:11:00
 #SBATCH --mem=8G
 
 set -euo pipefail

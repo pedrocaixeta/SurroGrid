@@ -1,6 +1,14 @@
 
 # GridForecast
 
+## Some updates to this ReadME
+- New script for transformer combined training (is there a scientific name for this approach that I should use instead of combined training?)
+- Analysis from the transformer HPO:
+  - Check if most of the 'finalist' samples (those that got permission to train to the max number of epochs which is 45), trained past their early stopping point. If that is not the case, you must raise the number of total epochs and submit the train again (don't forget to adjust SLURM's wallclock time accordingly)
+  - For the best sample, retrieve the epoch when it reached its early stopping point. this must be hardcodeldly passed down to GridForecast/3_transformer/train_combined_data.py in its "settings" header.
+- I also added a new container to enable use of other LRZ AI Systems partitions, so that the job gets picked quicker. This is specially useful for the combined training
+---
+
 This folder contains the **GridForecast** step: creating machine-learning ready time series datasets from GridExpand results and training **MLP** and **Transformer** models to forecast grid-level net demand.
 
 The code is organized into three sub-steps:
@@ -94,7 +102,7 @@ GridForecast/
     evaluation.py
     resource_report.py
     run_transformer_model_HPO.py
-    run_transformer_model.ipynb
+    run_transformer_model.ipynb      # manual quick transformer training and evaluation
     submit_asha_tpe.sbatch
     data/                            # cached VMD results (HDF5) if VMD_APPROACH=read/write
     ray_tune/                        # Ray Tune experiment storage
@@ -200,6 +208,7 @@ Additional project-specific outputs may appear in `models/` (e.g. exported `.pt`
   - model: per-timestep MLP → positional encoding → transformer encoder → output head
   - aggregation: sum aggregation (classic) or depthwise Conv1D aggregation (`aggregation_mode='conv'`)
   - optional VMD: if enabled, computes or reads cached VMD modes for selected columns (`VMD_COLS`)
+- Framework for quick manual transformer training and evaluation: `run_transformer_model.ipynb`
 
 ---
 
