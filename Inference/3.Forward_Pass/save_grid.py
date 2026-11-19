@@ -1,8 +1,9 @@
-"""HDF5 I/O helper for Inference/3.feature_generation.
+"""HDF5 I/O helper for Inference/3.Forward_Pass.
 
-Locates `*_DmdAllocated.h5` input files by grid ID, copies them to `STORAGE_DIR`
-so inputs are never modified in-place, writes `/surrogate_in/*` feature tables
-with blosc compression, and appends `_Features` only after all steps succeed.
+Locates `*_Features.h5` input files by grid ID, copies them into `STORAGE_DIR`
+so upstream files are never modified in-place, saves `/surrogate_out/*`
+prediction tables with blosc compression, and appends `_Predicted` only after
+the forward pass finishes successfully.
 """
 
 import os
@@ -14,11 +15,11 @@ from pandas.errors import PerformanceWarning
 import pipeline_config as cfg
 
 
-def find_grid_file_by_id(directory, file_id, exclude_suffixes=("_Features.h5", "_Predicted.h5")):
-    """Find a demand-allocated .h5 grid file in `directory` matching `file_id`.
+def find_grid_file_by_id(directory, file_id, exclude_suffixes=("_Predicted.h5",)):
+    """Find a feature-enriched .h5 grid file in `directory` matching `file_id`.
 
     Supports unpadded ('197'), 4-digit ('0197'), and 5-digit ('51431') prefixes.
-    Prefers files ending with '_DmdAllocated.h5' when multiple files share an ID.
+    Prefers files ending with '_Features.h5' when multiple files share an ID.
     """
     all_entries = sorted(os.listdir(directory))
     h5_files = [
@@ -40,16 +41,16 @@ def find_grid_file_by_id(directory, file_id, exclude_suffixes=("_Features.h5", "
             f"No grid file found in '{directory}' matching ID {file_id}. Found 0 matches."
         )
 
-    # Prefer *_DmdAllocated.h5 if both raw/gt and demand-allocated files exist in the same folder
-    dmd_alloc_matches = [f for f in matched_files if f.endswith("_DmdAllocated.h5")]
-    if dmd_alloc_matches:
-        return dmd_alloc_matches[0]
+    # Prefer *_Features.h5 when multiple files share the same grid ID
+    feat_matches = [f for f in matched_files if f.endswith("_Features.h5")]
+    if feat_matches:
+        return feat_matches[0]
 
     return matched_files[0]
 
 
 class SaveFile:
-    """Manages copying an input HDF5 file to STORAGE_DIR and saving feature tables."""
+    """Manages copying a feature HDF5 file to STORAGE_DIR and saving predictions."""
 
     def __init__(self, filename, input_dir=None, output_dir=None):
         self.filename = filename
@@ -79,7 +80,7 @@ class SaveFile:
 
     @staticmethod
     def append_suffix(file_path, suffix=None):
-        """Append `suffix` before '.h5' once all feature-generation steps succeed."""
+        """Append `suffix` before '.h5' once the forward pass finishes successfully."""
         suffix = suffix if suffix is not None else cfg.OUTPUT_SUFFIX
         stem, ext = os.path.splitext(file_path)
         if stem.endswith(suffix):

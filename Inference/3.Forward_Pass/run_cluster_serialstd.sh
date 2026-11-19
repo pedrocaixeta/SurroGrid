@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J inf_feat_gen
+#SBATCH -J inf_fwd_pass
 #SBATCH --output=logs/normal/%j_output.log
 #SBATCH --error=logs/errors/%j_error.log
 
@@ -19,16 +19,15 @@ module load miniforge3
 module list
 
 eval "$(conda shell.bash hook)"
-conda activate inference
+# Requires PyTorch (e.g., 'training' env, or 'inference' if CPU-only torch is installed there)
+conda activate training
 conda env list
 
-# Prevent nested BLAS/OpenMP threads from oversubscribing multiprocessing workers
-export OMP_NUM_THREADS=1
-export MKL_NUM_THREADS=1
-export OPENBLAS_NUM_THREADS=1
-export VECLIB_MAXIMUM_THREADS=1
-export NUMEXPR_NUM_THREADS=1
+# Match PyTorch CPU threads to allocated SLURM CPUs
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export HDF5_USE_FILE_LOCKING=FALSE
+export PYTORCH_NVML_DISABLE=1
 
 start_time=$(date +"%Y-%m-%d %H:%M:%S")
 echo "Script started at: $start_time"
