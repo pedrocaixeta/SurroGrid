@@ -24,8 +24,9 @@ from copy import deepcopy
 
 def prepare_grid(grid):
     """ Set max_i to very high value. Remove transformer and replace with small line. """
-    # Increase max line capacity
+    # Guard against zero-length lines that can crash pandapower
     df_lines = grid.line
+    df_lines.loc[df_lines["length_km"] == 0.0, "length_km"] = 0.000001
     df_lines["max_i_ka"] = 1000
     grid.line = df_lines
 
@@ -130,14 +131,18 @@ def run_full_pf(grid, df_demand):
 
 
 def pf(grid, df, parallel, n_cpu):
-    if parallel:
+    if parallel and n_cpu > 1:
         # Partition df into n_cpu equal chunks
         chunk_size = (len(df) + n_cpu - 1) // n_cpu  # ceiling division
-        chunks = [df.iloc[i * chunk_size : (i + 1) * chunk_size] for i in range(n_cpu)]
+        chunks = [
+            df.iloc[i * chunk_size : (i + 1) * chunk_size]
+            for i in range(n_cpu)
+            if i * chunk_size < len(df)
+        ]
         # Create job arguments
         job_args = [(deepcopy(grid), chunk) for chunk in chunks]
         # Run parallel
-        with Pool() as pool: results = pool.starmap(run_full_pf, job_args)
+        with Pool(processes=len(chunks)) as pool: results = pool.starmap(run_full_pf, job_args)
         # Concatenate results
         ext_imports = pd.concat([results[i][0] for i in range(len(results))], axis=0).reset_index(drop=True)
         vm = pd.concat([results[i][1] for i in range(len(results))], axis=0).reset_index(drop=True)

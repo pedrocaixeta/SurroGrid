@@ -1,8 +1,16 @@
+# Python bytecode cache
+__pycache__/
+*.py[cod]
+
 # Sensitive data
 gridalloc/data/statistics/inhabited_buildings/elec_lps.h5
 
 # Ignore logs, results, input data
 docs/
+logs/normal/*
+!logs/normal/.gitkeep
+logs/errors/*
+!logs/errors/.gitkeep
 gridalloc/data/grids/*
 !gridalloc/data/grids/.gitkeep
 gridalloc/results/*

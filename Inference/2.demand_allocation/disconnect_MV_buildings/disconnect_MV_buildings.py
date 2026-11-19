@@ -30,12 +30,24 @@ warnings.filterwarnings('ignore', category=PerformanceWarning)
 # Disable HDF5 file locking to avoid errors on network mounts or HPC filesystems
 os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
 
-# Folder containing intermediate allocated-demand grid H5 files
-INPUT_FOLDER = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/3.Post_Urbs/"
+# Folder containing intermediate allocated-demand grid H5 files (centrally defined in ../pipeline_config.py)
+import sys
+_PIPELINE_DIR = str(Path(__file__).resolve().parent.parent)
+if _PIPELINE_DIR not in sys.path:
+    sys.path.insert(0, _PIPELINE_DIR)
+from pipeline_config import STORAGE_DIR as INPUT_FOLDER
 
 # Peak demand thresholds in kilowatts (kW)
 COMMERCIAL_PUBLIC_THRESHOLD_KW = 100.0
 RESIDENTIAL_THRESHOLD_KW = 250.0
+
+
+def _normalize_bus_id(bus_id):
+    """Normalize a bus ID to a canonical integer string (e.g., 51.0 -> '51')."""
+    try:
+        return str(int(float(bus_id)))
+    except (ValueError, TypeError):
+        return str(bus_id)
 
 
 def extract_index_from_filename(filename):
@@ -91,7 +103,7 @@ def process_hdf5_file(file_path):
     # Store peak demand (maximum value over time) in a dictionary mapped by bus ID
     bus_peak_demands = {}
     for col in elec_cols:
-        bus_id_str = str(col[0])
+        bus_id_str = _normalize_bus_id(col[0])
         peak_value = df_demand[col].max()
         bus_peak_demands[bus_id_str] = peak_value
 
@@ -108,7 +120,7 @@ def process_hdf5_file(file_path):
         if pd.isna(bus_id):
             continue
             
-        bus_id_str = str(bus_id)
+        bus_id_str = _normalize_bus_id(bus_id)
         
         # Get peak electricity demand for this bus (default to 0.0 if not found)
         peak_demand = bus_peak_demands.get(bus_id_str, 0.0)
@@ -152,8 +164,10 @@ def process_hdf5_file(file_path):
                 print(f"  [Warning] 'raw_data/net' is missing in {file_path.name}.")
                 return None
                 
-            # Read network JSON string
+            # Read network JSON string (handle both bytes and str)
             net_json = f['raw_data/net'][()]
+            if isinstance(net_json, bytes):
+                net_json = net_json.decode('utf-8')
             net_data = json.loads(net_json)
             
             # Load the 'load' dataframe which is serialized as JSON
@@ -169,7 +183,7 @@ def process_hdf5_file(file_path):
                     df_load['in_service'] = True
                 
                 # Identify which loads are on the buses we want to disconnect
-                load_mask = df_load['bus'].astype(str).isin(buses_to_disconnect)
+                load_mask = df_load['bus'].apply(_normalize_bus_id).isin(buses_to_disconnect)
                 
                 # Count how many loads are newly turned off (were in_service = True)
                 newly_disconnected_count = df_load[load_mask & (df_load['in_service'] != False)].shape[0]
@@ -197,13 +211,11 @@ def process_hdf5_file(file_path):
     # -----------------------------------------------------------------
     try:
         # Zero out pre-URBS demands in /urbs_in/demand
-        cols_to_zero = [col for col in df_demand.columns if str(col[0]) in buses_to_disconnect]
+        cols_to_zero = [col for col in df_demand.columns if _normalize_bus_id(col[0]) in buses_to_disconnect]
         if cols_to_zero:
             df_demand.loc[:, cols_to_zero] = 0.0
-            with h5py.File(str(file_path), 'a') as f:
-                if '/urbs_in/demand' in f:
-                    del f['/urbs_in/demand']
-            df_demand.to_hdf(str(file_path), key='/urbs_in/demand', mode='a')
+            with pd.HDFStore(str(file_path), mode="a", complib="blosc", complevel=9) as store:
+                store.put("/urbs_in/demand", df_demand)
             
         # Zero out post-URBS (MILP) demands in /urbs_out/MILP/tau_pro if they exist
         has_tau = False

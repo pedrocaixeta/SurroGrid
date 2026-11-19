@@ -17,7 +17,11 @@ class Grid:
     def __init__(self, settings):
         ### Setup savefile instance which manages data retrieval and saving
         self.settings = settings
-        self.SF = svgrd.SaveFile(settings["grid_filename"])
+        self.SF = svgrd.SaveFile(
+            settings["grid_filename"],
+            input_dir=settings.get("input_dir"),
+            output_dir=settings.get("output_dir"),
+        )
 
         ### Basic grid data
         self.df_buildings, self.df_region, self.df_weather_raw = self.SF.get_input_data()
@@ -141,51 +145,9 @@ class Grid:
         print("Finished generating heat demands!")
 
     def generate_mobility(self):
-        # First obtain missing BEV distributions over buildings + specs
+        # Baseline surrogate model (without-mobility): only sample vehicle counts
+        # per building (n_cars_tot proxy) and skip the expensive emobpy simulation.
         self.df_buildings = mbl.sample_statistics(self.df_buildings, self.df_region)
-        # Add daylight saving dummy shift to input data
-        wth_input = self._add_input_data_daylight_saving_shift(self.df_weather_raw)
-        wth_input = mbl.prepare_weather_input(wth_input)
-        # Main calculation
-        # if self.settings["parallel"]:
-
-        ### Info statement:
-        n_cars = self.df_buildings["n_cars_tot"].sum()
-        cars_per_cpu = -(-n_cars//self.settings["n_cpu"])
-        print(f"Simulating {n_cars} vehicle(s). Expected time {40*cars_per_cpu:.1f} minutes!")
-
-        ### Parallelized run
-        if n_cars > 0:
-            vehicles = [{key: value} for build_dict in self.df_buildings["car_dict"].values for key,value in build_dict.items()]
-            
-            # with ProcessPoolExecutor(max_workers=self.settings["n_cpu"]) as executor:
-            #     results = list(executor.map(mbl.get_mobility_demand, vehicles, [wth_input.copy()]*len(vehicles)))
-            
-            with ProcessPoolExecutor(max_workers=self.settings["n_cpu"]) as exe:
-                # 1) fire off all jobs
-                futures = [exe.submit(mbl.get_mobility_demand, v, wth_input) for v in vehicles]
-                # 2) wait until either one fails or all succeed
-                done, pending = wait(futures, return_when=FIRST_EXCEPTION)
-                # 3) if ANY failed, tear down and re‑raise
-                for fut in done:
-                    if fut.exception() is not None:
-                        exe.shutdown(cancel_futures=True) # cancel the rest
-                        raise fut.exception()             # propagate the first error
-                # 4) otherwise collect results
-                results = [f.result() for f in futures]
-
-            ### Concatenate results
-            self.df_demand_mobility = pd.concat([results[i][0] for i in range(len(results))], axis=1)
-            self.df_tve_mobility = pd.concat([results[i][1] for i in range(len(results))], axis=1)
-            for d in [results[i][2] for i in range(len(results))]: self.battery_dict.update(d)
-        # else:
-        #     ### Prepare vehicle data in correct input format (concat into one big vehicle dict)
-        #     vehicles = {}
-        #     self.df_buildings["car_dict"].apply(lambda x: vehicles.update(x))
-        #     self.df_demand_mobility, self.df_tve_mobility, self.battery_dict = mbl.get_mobility_demand(vehicles, wth_input)
-        
-        self.df_demand_mobility = self._add_output_data_daylight_saving_shift(self.df_demand_mobility, mobility_dmd=True)
-        self.df_tve_mobility = self._add_output_data_daylight_saving_shift(self.df_tve_mobility)
 
     ############################################
     ############ Urbs Input Sheets ############# 
@@ -202,56 +164,23 @@ class Grid:
         self.df_supim.index.name = "t"
     
     def create_demand(self):
-        # self.df_demand = pd.concat([self.df_demand_elec, self.df_demand_elec_react, 
-        #                             self.df_demand_heat_space, self.df_demand_heat_water, 
-        #                             self.df_demand_mobility], axis=1).reset_index(drop=True)
+        # Baseline model: electricity, space_heat, and water_heat only (no mobility timeseries)
         self.df_demand = pd.concat([self.df_demand_elec, self.df_demand_heat_space, 
-                                    self.df_demand_heat_water, self.df_demand_mobility], axis=1).reset_index(drop=True)
+                                    self.df_demand_heat_water], axis=1).reset_index(drop=True)
         self.df_demand.index.name = "t"
         
     def create_tve(self):
-        self.df_tve = pd.concat([self.df_tve_hpcop, self.df_tve_mobility], axis=1).reset_index(drop=True)
+        # Baseline model: air-source heat pump COP only (no mobility availability timeseries)
+        self.df_tve = self.df_tve_hpcop.reset_index(drop=True)
         self.df_tve.index.name = "t"
-
-    def create_bsp(self):
-        df_bsp = pd.DataFrame([[config.BSP_IMPORT, config.BSP_FEED_IN]] * len(self.df_supim_solar.index), index=self.df_supim_solar.index, columns=['electricity_import', 'electricity_feed_in'])
-        self.df_bsp = df_bsp
 
     def create_processes(self):
         df_pro_elec = elc.create_pro_elec(list(self.df_buildings["bus"]))
         df_pro_heat = heat.create_pro_heat(list(self.df_buildings["bus"]))
-        df_pro_mob = mbl.create_pro_mob(self.battery_dict)
         df_pro_sol = slr.create_pro_solar(self.df_buildings[["bus", "roofs"]])
         
-        df_pro = pd.concat([df_pro_elec,df_pro_heat,df_pro_mob,df_pro_sol], axis=0)
+        df_pro = pd.concat([df_pro_elec, df_pro_heat, df_pro_sol], axis=0)
         self.df_pro = df_pro.reset_index(drop=True)
-
-    def create_commodities(self):
-        df_com_elec = elc.create_com_elec(list(self.df_buildings["bus"]))
-        df_com_heat = heat.create_com_heat(list(self.df_buildings["bus"]))
-        df_com_mob = mbl.create_com_mob(self.battery_dict)
-        df_com_sol = slr.create_com_solar(list(self.df_supim_solar.columns))
-        
-        df_com = pd.concat([df_com_elec,df_com_heat,df_com_mob,df_com_sol], axis=0)
-        self.df_com =  df_com.reset_index(drop=True)   
-
-    def create_process_commodity(self):
-        df_pro_com_elec = elc.create_pro_com_elec()
-        df_pro_com_heat = heat.create_pro_com_heat()
-        df_pro_com_mob = mbl.create_pro_com_mob(self.battery_dict)
-        df_pro_com_sol = slr.create_pro_com_solar(list(self.df_supim_solar.columns.get_level_values(1).unique()))
-        
-        df_pro_com = pd.concat([df_pro_com_elec,df_pro_com_heat,df_pro_com_mob,df_pro_com_sol], axis=0)
-        self.df_pro_com = df_pro_com.reset_index(drop=True) 
-
-    def create_storages(self):
-        df_sto_elec = elc.create_sto_elec(list(self.df_buildings["bus"]))
-        df_sto_heat = heat.create_sto_heat(list(self.df_buildings["bus"]))
-        df_sto_mob = mbl.create_sto_mob(self.battery_dict)
-        
-        df_sto = pd.concat([df_sto_elec,df_sto_heat,df_sto_mob], axis=0)
-        self.df_sto = df_sto.reset_index(drop=True) 
-    
 
     ############################################
     ########## Saving all grid data ############ 
@@ -264,16 +193,12 @@ class Grid:
         self.SF.save_df(self.df_weather_raw, "raw_data/weather")
         self.SF.save_df(self.df_buildings,   "raw_data/buildings")
 
-        ### Saving urbs input sheets:
+        ### Saving per-building urbs_in tables needed for downstream feature extraction:
         self.SF.save_df(self.df_demand,      "urbs_in/demand")
         self.SF.save_df(self.df_supim,       "urbs_in/supim")
         self.SF.save_df(self.df_tve,         "urbs_in/eff_factor")
-        self.SF.save_df(self.df_bsp,         "urbs_in/buy_sell_price")
         self.SF.save_df(self.df_weather_urbs,"urbs_in/weather")
         self.SF.save_df(self.df_pro,         "urbs_in/process")
-        self.SF.save_df(self.df_com,         "urbs_in/commodity")
-        self.SF.save_df(self.df_pro_com,     "urbs_in/process_commodity")
-        self.SF.save_df(self.df_sto,         "urbs_in/storage")
 
     ############################################
     ################# Helpers ################## 
@@ -355,12 +280,12 @@ class Grid:
 
         # 4. Greedily assign each building to the bin with the smallest current load
         for idx, n_count in building_list:
-            if n_count == 0: pass
-            else:
-                current_load, bin_id = heapq.heappop(heap)
-                bins_indices[bin_id].append(idx)
-                new_load = current_load + n_count
-                heapq.heappush(heap, (new_load, bin_id))
+            # Ensure non-residential buildings with 0 flats are still assigned to a worker
+            weight = max(1, int(n_count)) if not pd.isna(n_count) else 1
+            current_load, bin_id = heapq.heappop(heap)
+            bins_indices[bin_id].append(idx)
+            new_load = current_load + weight
+            heapq.heappush(heap, (new_load, bin_id))
 
         # 5. Convert each non‐empty list of indices into a DataFrame slice
         bins_dfs: list[pd.DataFrame] = []

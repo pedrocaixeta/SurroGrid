@@ -1,14 +1,26 @@
+from pathlib import Path
+import sys
 import numpy as np
 import pandas as pd
+
+# Absolute paths so statistical datasets and top-level pipeline_config resolve from any working dir
+GRIDALLOC_DIR = Path(__file__).resolve().parent
+PIPELINE_DIR = GRIDALLOC_DIR.parent
+if str(PIPELINE_DIR) not in sys.path:
+    sys.path.insert(0, str(PIPELINE_DIR))
+
+from pipeline_config import DATA_GRID_DIR, OUTPUT_SUFFIX, STORAGE_DIR
+
 
 class Config:
     #--------------------------------------------------------------#
     #----------------- Paths/Dataset Readout ----------------------#
     #--------------------------------------------------------------#
-    ##### Important data paths #####
-    DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/1.Grid_Sampled/"           # Directory from which to read the pylovo grid input data
-    DATA_STAT_DIR = "data/statistics"      # Directory from which to read data for computing demands
-    STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/2.Demand_Allocated/"                # Directory in which to store resulting urbs input files
+    # Input/output paths are centrally defined in ../pipeline_config.py
+    DATA_GRID_DIR = DATA_GRID_DIR
+    STORAGE_DIR = STORAGE_DIR
+    OUTPUT_SUFFIX = OUTPUT_SUFFIX
+    DATA_STAT_DIR = str(GRIDALLOC_DIR / "data" / "statistics")                                          # Directory with statistical reference datasets
 
     #--------------------------------------------------------------#
     #-------------- Weather Data API Connections ------------------#
@@ -122,33 +134,16 @@ class Config:
     PROB_FLOOR = 0.273                              # Probability for building to be heating with floor heating
 
     #--------------------------------------------------------------#
-    #----------- Emobpy Mobility Generator Constants --------------#
+    #----------- Mobility Proxy Statistics (No emobpy) ------------#
     #--------------------------------------------------------------#
-    # Statistical and input data
-    EMOBPY_DATA_PATH = f"{DATA_STAT_DIR}/general/"
-    CARS_PER_HH_BY_REGION = pd.read_csv(f"{DATA_STAT_DIR}/general/cars_per_household_by_region.csv", 
+    # Statistical data used to sample n_cars_tot (# Vehicles proxy for baseline model)
+    CARS_PER_HH_BY_REGION = pd.read_csv(f"{DATA_STAT_DIR}/general/cars_per_household_by_region.csv",
                                     dtype={"region": int, "hh_size": int, "vehicle_count": int, "probability": float},
                                     skiprows=1)
-    CAR_MODEL_DISTRIBUTION = pd.read_csv(f"{DATA_STAT_DIR}/general/cars_by_model.csv", 
+    CAR_MODEL_DISTRIBUTION = pd.read_csv(f"{DATA_STAT_DIR}/general/cars_by_model.csv",
                                     dtype={"model": str, "probability": float},
                                     skiprows=1)
     PROB_COMMUTING = 0.62              # Probability of a car having commuter profile, source: https://www.nature.com/articles/s41597-021-00932-9
-
-    # Emobpy data
-    MBL_TIME_STEP_LENGTH = 0.5
-    MBL_REF_DATE = f"01/01/{REF_YEAR}"
-    TOTAL_HOURS = 8760
-
-    PASSENGER_MASS = 75                # kg
-    PASSENGER_HEAT = 70                # W
-    PASSENGER_NR = 1.5                 # Passengers per vehicle including driver
-    CABIN_HEAT_TRANSFER_COEF = 10      # W/(m2K). Interior walls
-    AIR_FLOW = 0.01                    # m3/s. Ventilation
-    DRIVIG_CYCLE_TYPE ='WLTC'          # Two options "WLTC" or "EPA"
-    ROAD_TYPE = 0                      # For rolling resistance, Zero represents a new road.
-    ROAD_SLOPE = 0
-
-    CAPACITY_HOME_CHARGING = 11        # kW
     
     #--------------------------------------------------------------#
     #------------------ Urbs Input Constants ----------------------#
