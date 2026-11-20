@@ -20,7 +20,7 @@ set -euo pipefail
 # ------------------------- User Configuration ------------------------------- #
 # ---------------------------------------------------------------------------- #
 # Default DSO short code (can also be passed as the first positional CLI argument)
-DSO_SHORT="${DSO_SHORT:-Nrgie}"
+DSO_SHORT="${DSO_SHORT:-SWU}"
 
 # Input raw grids folder and flat output folder
 RAW_GRID_DIR="${RAW_GRID_DIR:-/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/0.Raw_grids}"
@@ -34,12 +34,12 @@ CLUSTER="${CLUSTER:-serial}"
 PARTITION="${PARTITION:-serial_long}"
 QOS="${QOS:-cm4_serial_long}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-4}"
-MEM="${MEM:-6G}"
-TIME_PER_GRID_MIN="${TIME_PER_GRID_MIN:-10}"   # Walltime budget per grid (minutes)
+MEM="${MEM:-4G}"
+TIME_PER_GRID_MIN="${TIME_PER_GRID_MIN:-5}"    # Walltime budget per grid (minutes; avg ~3 min/grid)
 
 # Array scaling defaults
 MAX_CONCURRENT="${MAX_CONCURRENT:-50}"         # Max simultaneously running array tasks (%N)
-GRIDS_PER_TASK="${GRIDS_PER_TASK:-1}"          # Grids run sequentially inside each array task
+GRIDS_PER_TASK="${GRIDS_PER_TASK:-10}"         # 10 grids/task -> 50 min shared pool (36 tasks for SWU)
 MAX_GRIDS="${MAX_GRIDS:-0}"                    # 0 = all pending grids; >0 = cap for testing
 
 # Resolve script directory (handles both direct invocation and SLURM spool copies)
@@ -115,11 +115,13 @@ if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
     echo ""
     echo "------------------------------------------------------------------------"
     echo "Grid ID: $GRID_ID (raw stem: $RAW_STEM)"
-    if [ -f "$EXPECTED_OUT" ]; then
-      echo "Already inferred -> skipping: $EXPECTED_OUT"
-      SKIPPED=$((SKIPPED + 1))
-      continue
-    fi
+    # Auto-skip temporarily disabled so existing *_direc_Inferred.h5 files get overwritten
+    # while adapting the NAP 2045 scenario. Uncomment to resume without re-running completed grids:
+    # if [ -f "$EXPECTED_OUT" ]; then
+    #   echo "Already inferred -> skipping: $EXPECTED_OUT"
+    #   SKIPPED=$((SKIPPED + 1))
+    #   continue
+    # fi
 
     if srun python3 main.py "$GRID_ID" \
          --n_cpu "${SLURM_CPUS_PER_TASK:-1}" \
@@ -237,13 +239,15 @@ raw_dir, out_dir, dso_short, out_suffix, max_grids, manifest_path, dry_run = (
 
 exclude_suffixes = ("_DmdAllocated.h5", "_Features.h5", "_Predicted.h5", f"{out_suffix}.h5", "_pwrflw.h5")
 
-# Single fast scan of existing outputs (avoids thousands of per-file stat() calls on DSS)
-done_files = set()
-if os.path.isdir(out_dir):
-    with os.scandir(out_dir) as it:
-        for entry in it:
-            if entry.name.endswith(f"{out_suffix}.h5"):
-                done_files.add(entry.name)
+# Auto-skip temporarily disabled so existing *_direc_Inferred.h5 files get overwritten
+# while adapting the NAP 2045 scenario. Uncomment the block below (and switch `pending`
+# back to filtering against `done_files`) once you want resumable skip-existing behavior:
+# done_files = set()
+# if os.path.isdir(out_dir):
+#     with os.scandir(out_dir) as it:
+#         for entry in it:
+#             if entry.name.endswith(f"{out_suffix}.h5"):
+#                 done_files.add(entry.name)
 
 # Single fast scan of raw grids matching exact second token == dso_short
 matched = []
@@ -258,10 +262,11 @@ with os.scandir(raw_dir) as it:
 
 matched.sort(key=lambda x: x[1])
 total = len(matched)
-pending = [
-    (gid, stem) for gid, stem in matched
-    if f"{stem}{out_suffix}.h5" not in done_files
-]
+# pending = [
+#     (gid, stem) for gid, stem in matched
+#     if f"{stem}{out_suffix}.h5" not in done_files
+# ]
+pending = list(matched)
 already_done = total - len(pending)
 
 if max_grids > 0:
