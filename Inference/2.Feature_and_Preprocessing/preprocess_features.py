@@ -69,23 +69,35 @@ def compute_vmd_features(df_raw, vmd_cols=None, vmd_settings=None, n_cpu=1):
     return df_vmd_only
 
 
-def engineer_features(df_raw, n_cpu=1):
+def engineer_features(df_raw, n_cpu=1, scaler_data=None):
     """Apply log1p, sinusoidal seasonal encodings, and VMD decomposition to `df_raw`.
 
     Matches `Preprocessor._universal_X_trafo` in `transformer_model.py` exactly.
-    Returns an unscaled (8760 x 49) DataFrame.
+    When `scaler_data` (loaded from `scalers_*.json`) is provided, feature lists,
+    `TS_PERIODS`, `VMD_K_MODES`, and `VMD_SETTINGS` are read directly from it so
+    swapping surrogate models never requires manual config edits.
     """
-    df_X = df_raw[cfg.X_BASE_COLS].copy()
+    src = scaler_data if scaler_data is not None else {}
+    x_base_cols = list(src.get("X_BASE_COLS", cfg.X_BASE_COLS))
+    log1p_cols = list(src.get("LOG1P_COLS", cfg.LOG1P_COLS))
+    ts_periods = [int(p) for p in src.get("TS_PERIODS", cfg.TS_PERIODS)]
+    vmd_cols = list(src.get("VMD_COLS", cfg.VMD_COLS))
+    vmd_settings = dict(src.get("VMD_SETTINGS", cfg.VMD_SETTINGS))
+    if "VMD_K_MODES" in src:
+        vmd_settings["K"] = int(src["VMD_K_MODES"])
+    vmd_k = int(vmd_settings.get("K", cfg.VMD_K_MODES))
+
+    df_X = df_raw[x_base_cols].copy()
 
     # 1. Log1p transform on skewed grid topology proxies (deterministic, in-place)
-    for col in cfg.LOG1P_COLS:
+    for col in log1p_cols:
         if col in df_X.columns:
             df_X[col] = np.log1p(df_X[col].astype(np.float32))
 
-    # 2. Sinusoidal seasonal encodings for year (8760h), week (168h), and day (24h)
+    # 2. Sinusoidal seasonal encodings (e.g., 8760h, 168h, 24h [, 12h])
     hours = df_X.index.to_numpy(dtype=np.float64)
     seasonal_cols = []
-    for freq in cfg.TS_PERIODS:
+    for freq in ts_periods:
         seasonal_cols.append(
             pd.Series(np.sin(2 * np.pi / freq * hours), index=df_X.index, name=f"sin_{freq}")
         )
@@ -95,9 +107,12 @@ def engineer_features(df_raw, n_cpu=1):
     if seasonal_cols:
         df_X = pd.concat([df_X, pd.concat(seasonal_cols, axis=1)], axis=1)
 
-    # 3. VMD decomposition replacing the 6 raw hourly VMD columns
-    df_vmd_modes = compute_vmd_features(df_X, cfg.VMD_COLS, cfg.VMD_SETTINGS, n_cpu=n_cpu)
-    df_engineered = pd.concat([df_X.drop(columns=cfg.VMD_COLS), df_vmd_modes], axis=1)
+    # 3. VMD decomposition replacing raw hourly VMD columns (skipped when K == 0)
+    if vmd_k >= 1 and vmd_cols:
+        df_vmd_modes = compute_vmd_features(df_X, vmd_cols, vmd_settings, n_cpu=n_cpu)
+        df_engineered = pd.concat([df_X.drop(columns=vmd_cols), df_vmd_modes], axis=1)
+    else:
+        df_engineered = df_X
 
     return df_engineered.astype(np.float32)
 
@@ -149,12 +164,19 @@ def scale_features(df_vmd, scaler_data):
 def preprocess_features(df_raw, scaler_path=None, n_cpu=1, skip_scaling=False):
     """Run full preprocessing: feature engineering + VMD + StandardScaler.
 
-    Returns `(df_vmd, df_scaled)`. If `skip_scaling=True`, `df_scaled` is `None`.
+    Loads `scalers_*.json` first so `TS_PERIODS`, `VMD_K_MODES`, and `VMD_SETTINGS`
+    automatically match the target `.pt` model. Returns `(df_vmd, df_scaled)`.
+    If `skip_scaling=True`, `df_scaled` is `None`.
     """
-    df_vmd = engineer_features(df_raw, n_cpu=n_cpu)
+    scaler_data = None
+    if not skip_scaling:
+        scaler_data = load_scalers(scaler_path)
+    elif scaler_path is not None and Path(scaler_path).exists():
+        scaler_data = load_scalers(scaler_path)
+
+    df_vmd = engineer_features(df_raw, n_cpu=n_cpu, scaler_data=scaler_data)
     if skip_scaling:
         return df_vmd, None
 
-    scaler_data = load_scalers(scaler_path)
     df_scaled = scale_features(df_vmd, scaler_data)
     return df_vmd, df_scaled
