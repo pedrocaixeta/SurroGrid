@@ -13,7 +13,7 @@ PIPELINE_DIR = Path(__file__).resolve().parent
 # ----------------------------- Data Paths ---------------------------------- #
 # --------------------------------------------------------------------------- #
 # Input folder containing raw grid .h5 files from Grid_Importing
-DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/0.Raw_grids/"
+DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/1.Grid_Sampled/"
 
 # Output folder where completed *_direc_Inferred.h5 files are saved
 STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Directly_Inferred/"
