@@ -5,11 +5,12 @@
 #SBATCH --error=logs/errors/%j_error.log
 
 #SBATCH --clusters=serial
-#SBATCH --partition=serial_std
+#SBATCH --partition=serial_long
+#SBATCH --qos=cm4_serial_long
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=0-00:20:00
-#SBATCH --mem=8G
+#SBATCH --mem=6G
 
 set -euo pipefail
 
