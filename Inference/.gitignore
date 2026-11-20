@@ -2,8 +2,10 @@
 __pycache__/
 *.py[cod]
 
-# Ignore SLURM logs
+# Ignore SLURM logs and generated DSO manifests
 logs/normal/*
 !logs/normal/.gitkeep
 logs/errors/*
 !logs/errors/.gitkeep
+logs/manifests/*
+!logs/manifests/.gitkeep

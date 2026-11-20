@@ -55,13 +55,31 @@ Edit [pipeline_config.py](pipeline_config.py) to change default paths or retenti
 ## Environment & SLURM Resources
 
 - **Conda environment (LRZ)**: `inference` (includes all Stage 1-2 packages plus CPU-only PyTorch via `pip install torch --index-url https://download.pytorch.org/whl/cpu`).
-- **SLURM script**: [run_cluster_serialstd.sh](run_cluster_serialstd.sh) — `serial_std`, 4 CPUs, 8 GB RAM, 20 min walltime (~8 min for Step 1 on a 125-building grid + ~6 s for Steps 2-3).
+- **Single-grid SLURM script**: [infer_single_grid.sh](infer_single_grid.sh) — `serial_long` (`--qos=cm4_serial_long`), 4 CPUs, 6 GB RAM, 20 min walltime (~8 min for Step 1 on a 125-building grid + ~6 s for Steps 2-3).
+- **DSO batch SLURM array script**: [infer_all_grids_from_dso.sh](infer_all_grids_from_dso.sh) — self-submitting SLURM job array (`serial_long` + `--qos=cm4_serial_long` by default; override with `--partition serial_std --qos ""`) that scans `0.Raw_grids/` for all grids belonging to a DSO short code (`AllgN`, `ByWrk`, `LEW`, `MFrak`, `Nrgie`, `RegB`, `SWA`, `SWM`, `SWU`, `nVNB`), automatically skips grids that already have `*_direc_Inferred.h5` in `Directly_Inferred/`, and submits a throttled job array (`%50` concurrency by default).
 
 ## Usage
 
 ### On LRZ Linux Cluster (SLURM)
+
+Single grid:
 ```bash
-sbatch run_cluster_serialstd.sh 0197
+sbatch infer_single_grid.sh 0197
+```
+
+All grids of a DSO (run directly on `cm4login1`, **not** wrapped in `sbatch`):
+```bash
+# Preview matching / already-done / pending counts without submitting
+./infer_all_grids_from_dso.sh SWU --dry-run
+
+# Smoke-test first 5 pending grids
+./infer_all_grids_from_dso.sh SWU --limit 5
+
+# Submit all pending grids for the hardcoded default DSO (or pass a DSO short code)
+./infer_all_grids_from_dso.sh Nrgie
+
+# For very large DSOs (e.g., ByWrk with 38k grids), chunk multiple grids per array task
+./infer_all_grids_from_dso.sh ByWrk --grids-per-task 5 --max-concurrent 50
 ```
 
 ### Local Test Run (WSL)
