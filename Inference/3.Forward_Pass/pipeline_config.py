@@ -25,8 +25,8 @@ OUTPUT_SUFFIX = "_Predicted"
 # -------------------------- Model & Scaler Paths --------------------------- #
 # --------------------------------------------------------------------------- #
 # Trained Transformer surrogate checkpoint and its matching frozen training scalers
-MODEL_PATH = str(PIPELINE_DIR / "baseline_alpha_peak_HPOfromOct17th.pt")
-SCALER_PATH = str(PIPELINE_DIR / "scalers_baseline_alpha_peak_HPOfromOct17th.json")
+MODEL_PATH = str(PIPELINE_DIR / "baseline_mae_maex_HPOfromOct15th.pt")
+SCALER_PATH = str(PIPELINE_DIR / "scalers_baseline_mae_maex_HPOfromOct15th.json")
 
 # --------------------------------------------------------------------------- #
 # ------------------------------ HDF5 Keys ---------------------------------- #

@@ -12,6 +12,25 @@ End-to-end single-grid inference runner that executes all three verified SurroGr
 
 The standalone step-by-step folders (`1.Cheap_Ground_Truth/`, `2.Feature_and_Preprocessing/`, `3.Forward_Pass/`) remain completely intact and are invoked as isolated subprocesses — zero duplicated code, zero `sys.modules` collisions, and clean per-stage BLAS/OpenMP threading.
 
+## Surrogate Model Choice: Why `mae_maex` (NMAE) Instead of `alpha_peak`?
+
+Even though the end goal is transformer sizing based on annual **peak apparent load `|S|`** (`max(|S|) > sn_mva`), we intentionally use **`baseline_mae_maex_HPOfromOct15th.pt`** (trained with normalized MAE / `mae_maex` loss; 45 features: VMD `K=3`, seasonal periods `[8760, 168, 24, 12]`) rather than `baseline_alpha_peak_HPOfromOct17th.pt` (trained with peak-weighted `alpha_peak` loss; 49 features: VMD `K=4`, `[8760, 168, 24]`).
+
+On the held-out test set (`train_combined-5862890.out` vs `train_combined-5863019.out`), the `mae_maex` model unexpectedly outperformed `alpha_peak` on **peak load prediction itself** as well as whole-year accuracy:
+
+| Held-out Test Metric (1h) | `baseline_mae_maex` (NMAE) | `baseline_alpha_peak` |
+| --- | ---: | ---: |
+| `|S|` Peak Load MdAPE | **4.15%** | 5.76% |
+| `|S|` Peak Load Mean MAPE | **6.67%** | 7.47% |
+| `|S|` Peak Load R^2 | **0.9839** | 0.9690 |
+| `|S|` Peak Load 95th percentile (`Median + (p95 - Median)`) | **16.86%** | 17.65% |
+| `P` Peak Import MdAPE / R^2 | **4.31%** / **0.9830** | 5.10% / 0.9688 |
+| `Q` Peak Import MdAPE / R^2 | **4.34%** / **0.9787** | 6.58% / 0.9666 |
+| `|S|` Median NMAE (full year) | **9.10%** | 9.62% |
+| Phase Angle MAE | **4.62 deg** | 5.70 deg |
+
+In addition, visual inspection of `S_07_peak_demand_grid_batched.png` and `P_07_peak_demand_grid_batched.png` confirmed symmetric scatter along the 1:1 diagonal across the entire range (`0` to `1.75 MVA`) with no systematic under-prediction of peaks. `2.Feature_and_Preprocessing` automatically reads `VMD_K_MODES` and `TS_PERIODS` from the paired `scalers_*.json`, so switching models only requires updating `MODEL_PATH` and `SCALER_PATH`.
+
 ## Output HDF5 Keys (`--keep_mode`)
 
 By default (`keep_mode="medium"`, ~40 MB vs ~120 MB full), `main.py` repacks the final HDF5 file cleanly into `STORAGE_DIR` (atomically renamed to `*_direc_Inferred.h5` after success):

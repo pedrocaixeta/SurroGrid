@@ -110,7 +110,7 @@ def export_scalers(
     vmd_cache_path=None,
     n_cpu=2,
     max_grids=None,
-    model_name="baseline_alpha_peak_HPOfromOct17th",
+    model_name="baseline_mae_maex_HPOfromOct15th",
     vmd_k_modes=None,
     ts_periods=None,
 ):
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_name",
-        default="baseline_alpha_peak_HPOfromOct17th",
+        default="baseline_mae_maex_HPOfromOct15th",
         help="Model name recorded inside the exported scaler JSON",
     )
     parser.add_argument(

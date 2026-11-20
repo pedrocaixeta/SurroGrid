@@ -3,8 +3,8 @@
 
 For a single `*_DmdAllocated_Features.h5` file from `2.Feature_and_Preprocessing`:
 1. Copies the input `.h5` file from `DATA_GRID_DIR` into `STORAGE_DIR`.
-2. Loads `/surrogate_in/features_scaled` (8760 x 49) and validates exact feature order.
-3. Loads the trained Transformer checkpoint (`baseline_alpha_peak_HPOfromOct17th.pt`)
+2. Loads `/surrogate_in/features_scaled` (e.g., 8760 x 45) and validates exact feature order.
+3. Loads the trained Transformer checkpoint (`baseline_mae_maex_HPOfromOct15th.pt`)
    and its matching frozen training scalers (`scalers_*.json`).
 4. Runs the circularly-padded forward pass and inverse-scales `(P, Q)` to MW / MVAr.
 5. Extracts the transformer's nominal capacity (`sn_mva`) from `/raw_data/net`

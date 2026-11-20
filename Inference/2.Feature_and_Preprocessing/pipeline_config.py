@@ -6,7 +6,7 @@ are written.
 
 Feature lists and VMD/preprocessing hyperparameters mirror the exact `baseline`
 configuration from `train_combined_data.py` used to train
-`baseline_alpha_peak_HPOfromOct17th.pt`.
+`baseline_mae_maex_HPOfromOct15th.pt`.
 """
 
 from pathlib import Path
@@ -28,7 +28,7 @@ OUTPUT_SUFFIX = "_Features"
 # Frozen training scalers exported once from ts_train.h5 via export_scalers.py
 # Stored alongside the matching .pt checkpoint in ../3.Forward_Pass/
 SCALER_PATH = str(
-    PIPELINE_DIR.parent / "3.Forward_Pass" / "scalers_baseline_alpha_peak_HPOfromOct17th.json"
+    PIPELINE_DIR.parent / "3.Forward_Pass" / "scalers_baseline_mae_maex_HPOfromOct15th.json"
 )
 
 # --------------------------------------------------------------------------- #
@@ -43,7 +43,7 @@ N_HOURS = 8760
 # --------------------------------------------------------------------------- #
 # ------------- Surrogate Preprocessing Settings (baseline model) ----------- #
 # --------------------------------------------------------------------------- #
-# Exact 19 base features in the order expected by baseline_alpha_peak_HPOfromOct17th.pt
+# Exact 19 base features in the order expected by baseline_mae_maex_HPOfromOct15th.pt
 X_BASE_COLS = [
     # Cheap Ground Truth (5 hourly series)
     "demand_net_active_pre",
@@ -76,8 +76,8 @@ X_BASE_COLS = [
 # Columns transformed with log1p before scaling
 LOG1P_COLS = ["n_lines", "tot_R_grid"]
 
-# Periods (hours) for sinusoidal seasonal encodings (sin_<p>, cos_<p>)
-TS_PERIODS = [8760, 168, 24]
+# Fallback seasonal periods and VMD settings (auto-overridden from SCALER_PATH JSON at runtime)
+TS_PERIODS = [8760, 168, 24, 12]
 
 # Hourly columns decomposed via Variational Mode Decomposition (VMD)
 VMD_COLS = [
@@ -88,7 +88,7 @@ VMD_COLS = [
     "PV_prod_expected",
     "T",
 ]
-VMD_K_MODES = 4
+VMD_K_MODES = 3
 VMD_SETTINGS = {
     "alpha": 2000,      # moderate bandwidth constraint
     "tau": 0.0,         # noise-tolerance (0 for noiseless)

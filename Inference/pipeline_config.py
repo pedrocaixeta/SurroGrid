@@ -33,8 +33,8 @@ STEP2_SCRIPT = str(STEP2_DIR / "main.py")
 STEP3_SCRIPT = str(STEP3_DIR / "main.py")
 
 # Default surrogate checkpoint and matching frozen training scalers
-MODEL_PATH = str(STEP3_DIR / "baseline_alpha_peak_HPOfromOct17th.pt")
-SCALER_PATH = str(STEP3_DIR / "scalers_baseline_alpha_peak_HPOfromOct17th.json")
+MODEL_PATH = str(STEP3_DIR / "baseline_mae_maex_HPOfromOct15th.pt")
+SCALER_PATH = str(STEP3_DIR / "scalers_baseline_mae_maex_HPOfromOct15th.json")
 
 # --------------------------------------------------------------------------- #
 # -------------------------- HDF5 Retention Modes --------------------------- #

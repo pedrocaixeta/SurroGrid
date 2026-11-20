@@ -1,6 +1,8 @@
 # Inference — Step 3: Surrogate Forward Pass
 
-Runs the trained baseline Transformer surrogate (`baseline_alpha_peak_HPOfromOct17th.pt`) on the scaled `8760 x 49` features produced by Step 2 and outputs the predicted post-expansion hourly transformer load (`p_mw`, `q_mvar`, `s_mva`, and `loading_pct` vs transformer nominal rating `sn_mva`).
+Runs the trained baseline Transformer surrogate (`baseline_mae_maex_HPOfromOct15th.pt`) on the scaled features (`8760 x 45`) produced by Step 2 and outputs the predicted post-expansion hourly transformer load (`p_mw`, `q_mvar`, `s_mva`, and `loading_pct` vs transformer nominal rating `sn_mva`).
+
+> **Why `mae_maex` (NMAE) instead of `alpha_peak`?** Despite targeting transformer peak load (`|S|`), held-out test evaluation showed `baseline_mae_maex_HPOfromOct15th.pt` beat `baseline_alpha_peak_HPOfromOct17th.pt` on peak load itself (`|S|` Peak Load MdAPE **4.15%** vs 5.76%, R^2 **0.9839** vs 0.9690, 95th percentile **16.86%** vs 17.65%, with unbiased 1:1 peak scatter). See [../README.md](../README.md) for the full comparison table.
 
 ```text
 Step_by_Step/2.Featured_and_Preprocessed/<grid>_DmdAllocated_Features.h5
@@ -13,10 +15,10 @@ Step_by_Step/2.Featured_and_Preprocessed/<grid>_DmdAllocated_Features.h5
 For a given grid ID, `main.py` copies `<grid>_DmdAllocated_Features.h5` into `STORAGE_DIR` and runs:
 
 1. **Load Inputs & Checkpoint (`transformer_model.py`)**
-   - Reads `/surrogate_in/features_scaled` (`8760 x 49`) and validates exact column order against `scalers_baseline_alpha_peak_HPOfromOct17th.json`.
-   - Loads `baseline_alpha_peak_HPOfromOct17th.pt` on CPU (automatically stripping `torch.compile`'s `_orig_mod.` state-dict prefix with `strict=True`).
+   - Reads `/surrogate_in/features_scaled` (`8760 x 45`) and validates exact column order against `scalers_baseline_mae_maex_HPOfromOct15th.json`.
+   - Loads `baseline_mae_maex_HPOfromOct15th.pt` on CPU (automatically stripping `torch.compile`'s `_orig_mod.` state-dict prefix with `strict=True`).
 2. **Forward Pass & Inverse Scaling**
-   - Builds circularly-padded daily windows (`365 x 216 x 49`, `core_len=24`, `pad_hours=96`), runs inference (~1–2 s on 4 CPU threads), and inverse-scales `(P, Q)` back to MW / MVAr using the frozen training `scaler_y`.
+   - Builds circularly-padded daily windows (`365 x 216 x 45`, `core_len=24`, `pad_hours=96`), runs inference (~1–2 s on 4 CPU threads), and inverse-scales `(P, Q)` back to MW / MVAr using the frozen training `scaler_y`.
 3. **Transformer Loading Assessment & Output**
    - Reads total in-service transformer nominal capacity `sn_mva` from `/raw_data/net`, computes `s_mva = sqrt(p_mw^2 + q_mvar^2)` and `loading_pct = (s_mva / sn_mva) * 100`.
    - Saves two tables:
@@ -32,8 +34,8 @@ Paths and checkpoint settings live in [pipeline_config.py](pipeline_config.py):
 - **`DATA_GRID_DIR`**: `/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/2.Featured_and_Preprocessed/`
 - **`STORAGE_DIR`**: `/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/3.Forward_Past/`
 - **`OUTPUT_SUFFIX`**: `_Predicted`
-- **`MODEL_PATH`**: `./baseline_alpha_peak_HPOfromOct17th.pt`
-- **`SCALER_PATH`**: `./scalers_baseline_alpha_peak_HPOfromOct17th.json`
+- **`MODEL_PATH`**: `./baseline_mae_maex_HPOfromOct15th.pt`
+- **`SCALER_PATH`**: `./scalers_baseline_mae_maex_HPOfromOct15th.json`
 
 ## Environment & SLURM Resources
 

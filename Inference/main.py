@@ -10,10 +10,11 @@ only after all stages succeed:
    - Demand allocation (without mobility), MV building disconnection, and
      pre-expansion pandapower load flow (`OMP/MKL/OPENBLAS=1`).
 2. `2.Feature_and_Preprocessing/main.py`
-   - 19 raw baseline features -> log1p + seasonal sin/cos + VMD (K=4) ->
-     frozen `scaler_X` (`8760 x 49`, `OMP/MKL/OPENBLAS=1`).
+   - 19 raw baseline features -> log1p + seasonal sin/cos + VMD (auto-read from
+     `scalers_*.json`, K=3 / 45 features for `baseline_mae_maex_HPOfromOct15th`)
+     -> frozen `scaler_X` (`OMP/MKL/OPENBLAS=1`).
 3. `3.Forward_Pass/main.py`
-   - Transformer surrogate forward pass (`baseline_alpha_peak_HPOfromOct17th.pt`)
+   - Transformer surrogate forward pass (`baseline_mae_maex_HPOfromOct15th.pt`)
      + inverse `scaler_y` -> hourly `p_mw`, `q_mvar`, `s_mva`, `loading_pct`,
      and `/surrogate_out/summary` (`OMP/MKL=n_cpu`).
 4. Repack & atomic completion
