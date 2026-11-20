@@ -1081,6 +1081,9 @@ class TransformerTrainer:
 
 
         ### Data Preprocessing (feature engineering + scaling)
+        self._data_cfg = dict(data_cfg)
+        self._train_n_grids = int(len(train_grids_all))
+        self._train_n_rows = int(len(X_train_raw))
         self.preprocessor = Preprocessor(data_cfg)
         # Fit scaler on aggregated targets
         X_train, y_train = self.preprocessor.fit_transform(X_train_raw, y_train_raw, agg)
@@ -1711,6 +1714,63 @@ class TransformerTrainer:
     def save(self, path: str, use_best: bool = True):
         state = self.best_state if (use_best and self.best_state is not None) else self.model.state_dict()
         torch.save({'config': self.cfg.__dict__, 'state_dict': state}, path)
+
+    def save_scalers_json(self, path: str, model_name: Optional[str] = None) -> str:
+        """Export fitted training scalers and preprocessing metadata to JSON for inference.
+
+        Produces the exact schema expected by `Inference/2.Feature_and_Preprocessing`
+        and `Inference/3.Forward_Pass` so scalers never have to be refitted manually.
+        """
+        if not hasattr(self, 'preprocessor') or not self.preprocessor.fitted:
+            raise RuntimeError("Preprocessor is not fitted; cannot export scalers.")
+
+        pp = self.preprocessor
+        data_cfg = getattr(self, '_data_cfg', {})
+        vmd_k = int(pp.VMD_K_MODES)
+        vmd_settings = {
+            'alpha': 2000,
+            'tau': 0.0,
+            'K': vmd_k,
+            'DC': 1,
+            'init': 1,
+            'tol': 1e-5,
+        }
+
+        # Dual-target mode fits scaler_y on 1D apparent power S -> scalar mean/scale
+        if len(pp.scaler_y.mean_) == 1:
+            scaler_y_mean: Any = float(pp.scaler_y.mean_[0])
+            scaler_y_scale: Any = float(pp.scaler_y.scale_[0])
+        else:
+            scaler_y_mean = [float(v) for v in pp.scaler_y.mean_]
+            scaler_y_scale = [float(v) for v in pp.scaler_y.scale_]
+
+        payload = {
+            'model_name': model_name if model_name is not None else Path(path).stem,
+            'source_ts_train': str(data_cfg.get('hdf_data_path', '')),
+            'train_n_grids': int(getattr(self, '_train_n_grids', 0)),
+            'train_n_rows': int(getattr(self, '_train_n_rows', int(getattr(pp.scaler_X, 'n_samples_seen_', 0)))),
+            'validation_ratio': float(data_cfg.get('validation_ratio', data_cfg.get('test_ratio', 0.2))),
+            'random_state': int(data_cfg.get('random_state', 42)),
+            'X_BASE_COLS': list(pp.X_BASE_COLS),
+            'LOG1P_COLS': list(pp.LOG1P_COLS),
+            'TS_PERIODS': [int(p) for p in pp.TS_PERIODS],
+            'VMD_COLS': list(pp.VMD_COLS),
+            'VMD_K_MODES': vmd_k,
+            'VMD_SETTINGS': vmd_settings,
+            'TARGET_COLS': list(pp.TARGET_COLS),
+            'feature_names': list(pp.feature_names_),
+            'scale_feature_names': list(pp.scale_feature_names_),
+            'scaler_X_mean': [float(v) for v in pp.scaler_X.mean_],
+            'scaler_X_scale': [float(v) for v in pp.scaler_X.scale_],
+            'scaler_y_mean': scaler_y_mean,
+            'scaler_y_scale': scaler_y_scale,
+        }
+
+        out_path = Path(path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, indent=2)
+        return str(out_path)
 
     @classmethod
     def load(cls, path: str) -> 'TransformerTrainer':

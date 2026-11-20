@@ -146,6 +146,11 @@ ckpt_path = os.path.join(model_dir, f"{model_name}.pt")
 transformer_trainer.save(ckpt_path, use_best=True)
 print(f"Model saved to: {ckpt_path}")
 
+# Save frozen training scalers alongside the .pt checkpoint for downstream inference
+scalers_path = os.path.join(model_dir, f"scalers_{model_name}.json")
+transformer_trainer.save_scalers_json(scalers_path, model_name=model_name)
+print(f"Scalers saved to: {scalers_path}")
+
 # 4. Evaluate metrics with best weights on test set and save plots
 test_results = transformer_trainer.evaluate_on_test_with_plots(test_data_cfg, save_dir=model_dir)
 print("Test results:", test_results)
