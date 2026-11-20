@@ -13,10 +13,10 @@ PIPELINE_DIR = Path(__file__).resolve().parent
 # ----------------------------- Data Paths ---------------------------------- #
 # --------------------------------------------------------------------------- #
 # Input folder containing *_DmdAllocated_Features.h5 files from 2.Feature_and_Preprocessing
-DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/3.Features_Generated/"
+DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/2.Featured_and_Preprocessed/"
 
 # Output folder where completed *_DmdAllocated_Features_Predicted.h5 files are saved
-STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/4.Forward_Past/"
+STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/3.Forward_Past/"
 
 # Suffix appended to the filename once the forward pass succeeds
 OUTPUT_SUFFIX = "_Predicted"

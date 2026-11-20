@@ -13,8 +13,8 @@ For a given grid ID, `main.py` orchestrates:
 ## Configuration
 
 Paths are defined in [pipeline_config.py](pipeline_config.py):
-- `DATA_GRID_DIR`: `/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/1.Raw_grids/`
-- `STORAGE_DIR`: `/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/2.Dmd_Allocated/`
+- `DATA_GRID_DIR`: `/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/0.Raw_grids/`
+- `STORAGE_DIR`: `/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/1.Cheap_Ground_Truthed/`
 - `OUTPUT_SUFFIX`: `_DmdAllocated`
 
 ## Environment

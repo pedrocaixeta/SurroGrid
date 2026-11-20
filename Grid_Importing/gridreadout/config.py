@@ -35,7 +35,7 @@ class Config:
     #----------------- Paths/Dataset Readout ----------------------#
     #--------------------------------------------------------------#
     # Important paths
-    # Local sshfs mountpoint for DSS: /dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Raw_grids/
+    # Local sshfs mountpoint for DSS: /dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/0.Raw_grids/
     STORAGE_DIR = "/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/hpc_mount"  # Directory in which to store results
     PYLOVO_COORD_FORMAT = "EPSG:25832" # Bavaria pylovo DB geometries (geom, centroid) use UTM 32N (SRID 25832)
     TARGET_COORD_FORMAT = "EPSG:4326"

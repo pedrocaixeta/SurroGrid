@@ -1,4 +1,4 @@
-"""Top-level configuration for Inference/3.feature_generation.
+"""Top-level configuration for Inference/2.Feature_and_Preprocessing.
 
 Edit DATA_GRID_DIR, STORAGE_DIR, OUTPUT_SUFFIX, and SCALER_PATH here to control
 where demand-allocated grids are read from and where feature-enriched HDF5 files
@@ -17,16 +17,19 @@ PIPELINE_DIR = Path(__file__).resolve().parent
 # ----------------------------- Data Paths ---------------------------------- #
 # --------------------------------------------------------------------------- #
 # Input folder containing *_DmdAllocated.h5 files from Inference/1.Cheap_Ground_Truth
-DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/2.Dmd_Allocated/"
+DATA_GRID_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/1.Cheap_Ground_Truthed/"
 
 # Output folder where completed *_DmdAllocated_Features.h5 files are saved
-STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/3.Features_Generated/"
+STORAGE_DIR = "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/2.Featured_and_Preprocessed/"
 
 # Suffix appended to the filename once extraction + VMD + scaling finish successfully
 OUTPUT_SUFFIX = "_Features"
 
 # Frozen training scalers exported once from ts_train.h5 via export_scalers.py
-SCALER_PATH = str(PIPELINE_DIR / "scalers_baseline_alpha_peak_HPOfromOct17th.json")
+# Stored alongside the matching .pt checkpoint in ../3.Forward_Pass/
+SCALER_PATH = str(
+    PIPELINE_DIR.parent / "3.Forward_Pass" / "scalers_baseline_alpha_peak_HPOfromOct17th.json"
+)
 
 # --------------------------------------------------------------------------- #
 # ----------------------- Feature Extraction Settings ----------------------- #

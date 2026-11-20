@@ -72,7 +72,7 @@ Required read-only tables in the `pylovo` schema (used by [gridreadout/src/db_re
 `Config.STORAGE_DIR` points to `/home/pedro/Linux-AntigravityProjects/SurroGrid-linux/hpc_mount`. Mount the DSS target folder via `sshfs` before running Notebook 2's export cell:
 
 ```bash
-sshfs <lrz_user>@<lrz_login_host>:/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Raw_grids/ /home/pedro/Linux-AntigravityProjects/SurroGrid-linux/hpc_mount
+sshfs <lrz_user>@<lrz_login_host>:/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/0.Raw_grids/ /home/pedro/Linux-AntigravityProjects/SurroGrid-linux/hpc_mount
 ```
 
 ---
