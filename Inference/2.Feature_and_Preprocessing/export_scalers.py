@@ -72,18 +72,32 @@ def _vmd_one_grid(args):
     return grid_id, np.concatenate(arrays, axis=1).astype(np.float64)
 
 
-def _build_feature_layout():
+def _parse_ts_periods(raw):
+    """Parse TS_PERIODS from list[int] or comma-separated string (e.g., '8760,168,24,12')."""
+    if raw is None:
+        return list(cfg.TS_PERIODS)
+    if isinstance(raw, str):
+        s = raw.strip()
+        return [int(p.strip()) for p in s.replace(" ", ",").split(",") if p.strip()] if s else []
+    return [int(p) for p in raw]
+
+
+def _build_feature_layout(ts_periods, vmd_k_modes):
     """Return exact (feature_names, scale_feature_names, non_vmd_cols, period_names, vmd_cols_out)."""
     period_names = []
-    for freq in cfg.TS_PERIODS:
+    for freq in ts_periods:
         period_names.extend([f"sin_{freq}", f"cos_{freq}"])
 
-    non_vmd_base = [c for c in cfg.X_BASE_COLS if c not in cfg.VMD_COLS]
-    vmd_cols_out = [
-        f"{base}_{k + 1}" if k < cfg.VMD_K_MODES else f"{base}_res"
-        for base in cfg.VMD_COLS
-        for k in range(cfg.VMD_K_MODES + 1)
-    ]
+    if int(vmd_k_modes) >= 1 and cfg.VMD_COLS:
+        non_vmd_base = [c for c in cfg.X_BASE_COLS if c not in cfg.VMD_COLS]
+        vmd_cols_out = [
+            f"{base}_{k + 1}" if k < int(vmd_k_modes) else f"{base}_res"
+            for base in cfg.VMD_COLS
+            for k in range(int(vmd_k_modes) + 1)
+        ]
+    else:
+        non_vmd_base = list(cfg.X_BASE_COLS)
+        vmd_cols_out = []
 
     feature_names = non_vmd_base + period_names + vmd_cols_out
     scale_feature_names = non_vmd_base + vmd_cols_out
@@ -96,13 +110,20 @@ def export_scalers(
     vmd_cache_path=None,
     n_cpu=2,
     max_grids=None,
+    model_name="baseline_alpha_peak_HPOfromOct17th",
+    vmd_k_modes=None,
+    ts_periods=None,
 ):
     """Fit scaler_X and scaler_y identically to `train_combined_data.py` and save JSON."""
     t0 = time.perf_counter()
     output_path = Path(output_path if output_path is not None else cfg.SCALER_PATH)
+    vmd_k_modes = int(cfg.VMD_K_MODES if vmd_k_modes is None else vmd_k_modes)
+    ts_periods = _parse_ts_periods(ts_periods)
+    vmd_settings = dict(cfg.VMD_SETTINGS)
+    vmd_settings["K"] = vmd_k_modes
 
     feature_names, scale_feature_names, non_vmd_base, period_names, vmd_cols_out = (
-        _build_feature_layout()
+        _build_feature_layout(ts_periods=ts_periods, vmd_k_modes=vmd_k_modes)
     )
 
     print(f"Loading training targets from: {ts_train_path}")
@@ -152,12 +173,23 @@ def export_scalers(
     # 3. Fit scaler_X using streaming partial_fit (exact same result as batch fit, minimal RAM)
     scaler_X = StandardScaler()
 
-    if vmd_cache_path is not None and os.path.exists(vmd_cache_path):
-        print(f"Loading cached VMD4 training data from: {vmd_cache_path} (key='data_train')")
+    if vmd_k_modes == 0:
+        # No VMD decomposition: fit directly on all base features
+        chunk_rows = 100 * cfg.N_HOURS
+        for start in range(0, len(X_train), chunk_rows):
+            end = min(start + chunk_rows, len(X_train))
+            scaler_X.partial_fit(X_train[non_vmd_base].iloc[start:end].to_numpy(dtype=np.float64))
+    elif vmd_cache_path is not None and os.path.exists(vmd_cache_path):
+        print(f"Loading cached VMD{vmd_k_modes} training data from: {vmd_cache_path} (key='data_train')")
         grid_vmd = pd.read_hdf(vmd_cache_path, key="data_train")
         if len(grid_vmd) != len(X_train):
             raise ValueError(
-                f"Cached VMD4 row count ({len(grid_vmd)}) does not match X_train ({len(X_train)})."
+                f"Cached VMD{vmd_k_modes} row count ({len(grid_vmd)}) does not match X_train ({len(X_train)})."
+            )
+        missing_vmd = [c for c in vmd_cols_out if c not in grid_vmd.columns]
+        if missing_vmd:
+            raise ValueError(
+                f"Cached VMD file '{vmd_cache_path}' is missing expected columns for K={vmd_k_modes}: {missing_vmd[:5]}"
             )
         grid_vmd = grid_vmd.reindex(columns=vmd_cols_out)
         # Fit chunk-by-chunk (100 grids at a time) to keep peak RAM low
@@ -172,7 +204,7 @@ def export_scalers(
     else:
         grid_ids = X_train.index.get_level_values(0).unique().tolist()
         print(
-            f"Computing VMD (K={cfg.VMD_K_MODES}) across {len(grid_ids)} grids "
+            f"Computing VMD (K={vmd_k_modes}) across {len(grid_ids)} grids "
             f"with {n_cpu} CPU(s) using streaming partial_fit..."
         )
         # Pre-extract compact numpy dicts per grid, then free X_train before spawning workers
@@ -182,7 +214,7 @@ def export_scalers(
             g_df = X_train.xs(gid, level=0)
             non_vmd_by_grid[gid] = g_df[non_vmd_base].to_numpy(dtype=np.float64)
             vmd_dict = {col: g_df[col].to_numpy(dtype=np.float64) for col in cfg.VMD_COLS}
-            tasks.append((gid, vmd_dict, cfg.VMD_SETTINGS))
+            tasks.append((gid, vmd_dict, vmd_settings))
         del X_train
         gc.collect()
 
@@ -202,7 +234,7 @@ def export_scalers(
                     print(f"  VMD progress: {idx}/{len(tasks)} grids ({time.perf_counter() - t0:.1f}s)")
 
     payload = {
-        "model_name": "baseline_alpha_peak_HPOfromOct17th",
+        "model_name": model_name,
         "source_ts_train": str(ts_train_path),
         "train_n_grids": len(train_grids_all),
         "train_n_rows": n_rows_expected,
@@ -210,10 +242,10 @@ def export_scalers(
         "random_state": cfg.TRAIN_RANDOM_STATE,
         "X_BASE_COLS": cfg.X_BASE_COLS,
         "LOG1P_COLS": cfg.LOG1P_COLS,
-        "TS_PERIODS": cfg.TS_PERIODS,
+        "TS_PERIODS": ts_periods,
         "VMD_COLS": cfg.VMD_COLS,
-        "VMD_K_MODES": cfg.VMD_K_MODES,
-        "VMD_SETTINGS": cfg.VMD_SETTINGS,
+        "VMD_K_MODES": vmd_k_modes,
+        "VMD_SETTINGS": vmd_settings,
         "TARGET_COLS": cfg.TARGET_COLS,
         "feature_names": feature_names,
         "scale_feature_names": scale_feature_names,
@@ -251,14 +283,30 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vmd_cache_path",
         default=None,
-        help="Optional path to precomputed VMD4_PVprodexpected_T_copavg_demandnetactivepre_heatspace_heatwater.h5",
+        help="Optional path to precomputed VMD{K}_PVprodexpected_T_copavg_demandnetactivepre_heatspace_heatwater.h5",
     )
     parser.add_argument(
         "--output_path",
         default=cfg.SCALER_PATH,
         help="Output JSON path for frozen scaler parameters",
     )
-    parser.add_argument("--n_cpu", type=int, default=2, help="Number of CPUs if VMD4 must be computed")
+    parser.add_argument(
+        "--model_name",
+        default="baseline_alpha_peak_HPOfromOct17th",
+        help="Model name recorded inside the exported scaler JSON",
+    )
+    parser.add_argument(
+        "--vmd_k",
+        type=int,
+        default=cfg.VMD_K_MODES,
+        help="Number of VMD modes K (e.g., 3 for baseline_mae_maex_HPOfromOct15th, 4 for alpha_peak)",
+    )
+    parser.add_argument(
+        "--ts_periods",
+        default=",".join(str(p) for p in cfg.TS_PERIODS),
+        help="Comma-separated seasonal periods in hours (e.g., '8760,168,24,12')",
+    )
+    parser.add_argument("--n_cpu", type=int, default=2, help="Number of CPUs if VMD must be computed")
     parser.add_argument(
         "--max_grids",
         type=int,
@@ -273,4 +321,7 @@ if __name__ == "__main__":
         vmd_cache_path=args.vmd_cache_path,
         n_cpu=args.n_cpu,
         max_grids=args.max_grids,
+        model_name=args.model_name,
+        vmd_k_modes=args.vmd_k,
+        ts_periods=args.ts_periods,
     )
