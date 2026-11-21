@@ -249,6 +249,8 @@ class Envelope:
                                                                 material_prop[2])
                         self.cp["opaque"][comp] = np.append(self.cp["opaque"][comp],
                                                             material_prop[3] * 1000)
+                    # Stop after first matching age group to prevent duplicate layers on overlapping TEASER bounds (e.g. SFH 2010)
+                    break
 
         comp = "roof"
         # ROOF: Materials and U-value
@@ -269,6 +271,8 @@ class Envelope:
                                                                 material_prop[2])
                         self.cp["opaque"][comp] = np.append(self.cp["opaque"][comp],
                                                             material_prop[3] * 1000)
+                    # Stop after first matching age group to prevent duplicate layers on overlapping TEASER bounds (e.g. SFH 2009)
+                    break
 
         comp = "floor"
         # FLOOR: Materials and U-value
@@ -289,6 +293,7 @@ class Envelope:
                                                                 material_prop[2])
                         self.cp["opaque"][comp] = np.append(self.cp["opaque"][comp],
                                                             material_prop[3] * 1000)
+                    break
 
         comp = "intWall"
         # INTERNAL WALL: Materials and U-value
@@ -373,6 +378,7 @@ class Envelope:
                                                           material_prop[2])
                         self.cp["window"] = np.append(self.cp["window"],
                                                       material_prop[3] * 1000)
+                    break
 
         for x in self.opaque:
             self.d_iso["opaque"][x] = sum(self.d["opaque"][x])

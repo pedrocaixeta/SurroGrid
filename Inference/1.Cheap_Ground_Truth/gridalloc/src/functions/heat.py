@@ -1,4 +1,5 @@
 from config import config
+import re
 import pandas as pd
 import numpy as np
 from src.external.districtgenerator.classes import *
@@ -73,6 +74,96 @@ def _get_cop(hp_type, heating_type, df_heat_space, df_heat_water, air_temp, soil
     return pd.DataFrame(cop_total)
 
 ##############################################################
+############ Refurbishment (Gebäudesanierung) Model ##########
+##############################################################
+def _extract_construction_year(constructi_val):
+    """Extract the integer construction year from `constructi` using the same regex as TABULA."""
+    if pd.isna(constructi_val):
+        return 1970  # Fallback aligned with datahandler.py default
+    match = re.search(r"(\d+)(?!.*\d)", str(constructi_val))
+    return int(match.group(1)) if match else 1970
+
+
+def calc_retrofit_probability(
+    construction_year,
+    p_max,
+    target_year=None,
+    weibull_l=None,
+    weibull_k=None,
+):
+    """Compute building refurbishment probability via a scaled Weibull CDF.
+
+    P_renov(construction_year) = p_max * (1 - exp(-((target_year - construction_year) / L)^k))
+    """
+    if target_year is None:
+        target_year = config.RETROFIT_TARGET_YEAR
+    if weibull_l is None:
+        weibull_l = config.RETROFIT_WEIBULL_L
+    if weibull_k is None:
+        weibull_k = config.RETROFIT_WEIBULL_K
+
+    year = _extract_construction_year(construction_year)
+    age = max(0.0, float(target_year - year))
+
+    # Scaled Weibull CDF: approaches 0 for new buildings and saturates at p_max for old stock
+    weibull_cdf = 1.0 - np.exp(-((age / float(weibull_l)) ** float(weibull_k)))
+    return float(np.clip(p_max * weibull_cdf, 0.0, 1.0))
+
+
+def sample_building_retrofit(
+    df_buildings,
+    p_max_res=None,
+    p_max_ghd=None,
+    prob_level_1=None,
+):
+    """Sample a TABULA retrofit level (0, 1, or 2) for each building in `df_buildings`.
+
+    Decision logic per building:
+    1. Select sector `p_max`: if `residential_floor_area >= nonresidential_floor_area`,
+       use `p_max_res`; otherwise use `p_max_ghd` (falls back to building `type` if both
+       floor-area columns are zero/missing).
+    2. Compute age-dependent refurbishment probability `P_renov(age)` via scaled Weibull CDF.
+    3. Draw whether the building is refurbished; if yes, sample TABULA level 1
+       (`tabula_retrofit`, conventional GEG) with probability `prob_level_1` and level 2
+       (`tabula_adv_retrofit`, ambitious BEG) with probability `1 - prob_level_1`.
+    """
+    if p_max_res is None:
+        p_max_res = config.RETROFIT_P_MAX_RES
+    if p_max_ghd is None:
+        p_max_ghd = config.RETROFIT_P_MAX_GHD
+    if prob_level_1 is None:
+        prob_level_1 = config.RETROFIT_PROB_LEVEL_1
+
+    prob_level_2 = 1.0 - float(prob_level_1)
+    retrofit_levels = []
+
+    for _, row in df_buildings.iterrows():
+        # Determine dominant use (residential vs. GHD) for mixed and single-use buildings
+        res_area = pd.to_numeric(row.get("residential_floor_area", 0), errors="coerce")
+        nonres_area = pd.to_numeric(row.get("nonresidential_floor_area", 0), errors="coerce")
+        res_area = 0.0 if pd.isna(res_area) else float(res_area)
+        nonres_area = 0.0 if pd.isna(nonres_area) else float(nonres_area)
+
+        if (res_area > 0.0) or (nonres_area > 0.0):
+            use_res_prob = res_area >= nonres_area
+        else:
+            use_res_prob = row.get("type", "") in config.BUILDINGS_SHORT
+
+        p_max = p_max_res if use_res_prob else p_max_ghd
+        p_renov = calc_retrofit_probability(row.get("constructi", np.nan), p_max=p_max)
+
+        # Sample refurbishment status and, if refurbished, sample TABULA retrofit depth (1 or 2)
+        if np.random.random() < p_renov:
+            level = int(np.random.choice([1, 2], p=[prob_level_1, prob_level_2]))
+        else:
+            level = 0
+        retrofit_levels.append(level)
+
+    df_buildings["retrofit"] = np.array(retrofit_levels, dtype=int)
+    return df_buildings
+
+
+##############################################################
 ############## Generation, Publicly Callable #################
 ##############################################################
 def sample_statistics(df_buildings):
@@ -93,6 +184,11 @@ def sample_statistics(df_buildings):
         ["radiator","floor"], 
         size=len(df_buildings), 
         p=[config.PROB_RADIATOR, config.PROB_FLOOR])
+
+    # Sample TABULA refurbishment level (0: unrenovated, 1: standard retrofit, 2: advanced retrofit)
+    # Sampled at building level so mixed buildings share one consistent envelope retrofit state
+    # and the sampled state is persisted to `raw_data/buildings`.
+    df_buildings = sample_building_retrofit(df_buildings)
 
     return df_buildings
 
@@ -176,12 +272,17 @@ def generate_heat_demands(df_buildings, df_elec_demand, df_elec_demand_res, df_e
     scenario = pd.DataFrame(scenario_rows)
     scenario.reset_index(drop=True, inplace=True)
     df_elec_demand_split = pd.DataFrame(split_elec_dict)
-    scenario = scenario[["new_id", "bus", "type", "constructi", "area", "floors", "houses_per_building", "occ_list", "NWG"]]
+
+    # Preserve building-level sampled retrofit state (fallback to 0 if not pre-sampled)
+    if "retrofit" not in scenario.columns:
+        scenario["retrofit"] = 0
+
+    scenario = scenario[["new_id", "bus", "type", "constructi", "area", "floors", "houses_per_building", "occ_list", "NWG", "retrofit"]]
     
     scenario.rename(inplace=True, columns={"new_id":"id", "type":"building", "houses_per_building":"nb_flat", "occ_list":"nb_occ", "constructi":"year"})
     scenario["year"] = scenario["year"].str.extract(r'(\d+)(?!.*\d)').astype(int)
     scenario["nb_occ"] = scenario["nb_occ"].apply(lambda x: [int(round(y,0)) for y in x])
-    scenario["retrofit"] = 0
+    scenario["retrofit"] = scenario["retrofit"].fillna(0).astype(int)
 
     # Extract location data
     site_data = pd.read_csv(f"{config.DISTGEN_DATA_PATH}/site_data.txt", delimiter='\t', dtype={'Zip': str})

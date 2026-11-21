@@ -133,6 +133,17 @@ class Config:
     PROB_RADIATOR = 0.727                           # Probability for building to be heating with radiators 
     PROB_FLOOR = 0.273                              # Probability for building to be heating with floor heating
 
+    ### Building refurbishment (Gebäudesanierung) probability model (Scaled Weibull CDF)
+    # P_renov(construction_year) = p_max * (1 - exp(-((RETROFIT_TARGET_YEAR - construction_year) / L)^k))
+    # Models component lifetime-driven renovation up to 2045 (Langfristszenarien O45 / Genehmigung SR 2025 B)
+    RETROFIT_TARGET_YEAR = 2045                     # Target scenario year (NAP 2045)
+    RETROFIT_WEIBULL_L = 45.0                       # Typical envelope component lifetime in years (Weibull scale parameter L)
+    RETROFIT_WEIBULL_K = 3.5                        # Wear-out aging shape parameter k
+    RETROFIT_P_MAX_RES = 0.40                       # Max refurbishment probability for residential buildings (to be tuned to 103.8 kWh_th/(m²·a))
+    RETROFIT_P_MAX_GHD = 0.40                       # Max refurbishment probability for non-residential (GHD) buildings (to be tuned to 90.6 kWh_th/(m²·a))
+    RETROFIT_PROB_LEVEL_1 = 0.85                    # Conditional probability of TABULA retrofit level 1 (conventional GEG) given renovated
+    RETROFIT_PROB_LEVEL_2 = 0.15                    # Conditional probability of TABULA retrofit level 2 (ambitious BEG) given renovated
+
     #--------------------------------------------------------------#
     #----------- Mobility Proxy Statistics (No emobpy) ------------#
     #--------------------------------------------------------------#
