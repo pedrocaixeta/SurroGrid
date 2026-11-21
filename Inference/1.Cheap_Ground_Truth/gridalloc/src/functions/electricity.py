@@ -187,13 +187,16 @@ def _assign_total_elec_demands(df_buildings):
 ################## Sampling building use #####################
 ##############################################################
 def _get_use_type(dist, nonresidential_use, nonresidential_floor_area):
-    if nonresidential_floor_area == 0:  
+    if pd.isna(nonresidential_floor_area) or nonresidential_floor_area <= 0:
         return pd.NA
-    if nonresidential_use == "Public":       # Sample from distribution
+    if nonresidential_use == "Public":       # Sample from public GHD distribution
         return np.random.choice(dist["type"], p=dist['public_prob'])
-    if nonresidential_use == "Commercial":   # Sample from distribution
+    if nonresidential_use == "Commercial":   # Sample from commercial GHD distribution
         return np.random.choice(dist["type"], p=dist['commercial_prob'])
-    return pd.NA
+    # Fallback for buildings with nonresidential_floor_area > 0 whose nonresidential_use
+    # is 'Unknown' or missing (e.g., mixed SFH/TH/MFH buildings in pylovo): default to
+    # the commercial distribution, consistent with heat.py (row_nonres["type"] = "Commercial").
+    return np.random.choice(dist["type"], p=dist['commercial_prob'])
 
 def _assign_use_type(df_buildings):
     df_type_dist = config.TYPE_GHD_DISTRIBUTION
