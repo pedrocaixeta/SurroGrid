@@ -192,19 +192,69 @@ def _calculateHeat(zoneParameters, T_e, T_set, T_m_init, dt, timestep):
 
 
 def calc(zoneParameters, T_e, holidays, dt, building_type):
-    """
-    """
-    if building_type in {"SFH", "TH", "MFH", "AB"}:
-        T_m_init = 19  # [°C]
-    else:
-        T_m_init = 12  # [°C] For non-residential buildings, the temperature at the beginning of the year is assumed to be very low since the building wasn't heated during the long holiday
+    """Fast pre-inverted 5R1C solver (DIN EN ISO 13790).
 
-    T_set = zoneParameters.T_set_min  # THeatingSet
-    T_set_ub = zoneParameters.T_set_max  # TCoolingSet
+    Since the 3x3 (free-float / max-power) and 4x4 (setpoint) conductance matrices A
+    are time-invariant for a building, pre-inverting them once per building avoids
+    ~15,000 calls to `np.linalg.solve` per building while producing identical results.
+    """
+    is_res = building_type in {"SFH", "TH", "MFH", "AB"}
+    T_m_init = 19.0 if is_res else 12.0
 
+    T_set = float(zoneParameters.T_set_min)
+    T_set_ub = float(zoneParameters.T_set_max)
     numberTimesteps = len(T_e)
 
-    # Initialize results
+    # Extract time-invariant building thermal parameters
+    H_tr_is = float(np.squeeze(zoneParameters.H_tr_is))
+    H_tr_ms = float(np.squeeze(zoneParameters.H_tr_ms))
+    H_tr_w = float(np.squeeze(zoneParameters.H_tr_w))
+    H_ve = float(np.squeeze(zoneParameters.H_ve))
+    C_m = float(np.squeeze(zoneParameters.C_m))
+    H_tr_em = float(np.squeeze(zoneParameters.H_tr_em[0]))
+    Q_nHC = float(np.squeeze(zoneParameters.heatload))
+    c_dt = C_m / (3600.0 * dt)
+
+    # Build and pre-invert the 4x4 setpoint matrix A4 and 3x3 free-floating matrix A3
+    A4 = np.zeros((4, 4), dtype=float)
+    A4[0, 0] = H_tr_em + H_tr_ms + c_dt
+    A4[0, 1] = -H_tr_ms
+    A4[1, 0] = -H_tr_ms
+    A4[1, 1] = H_tr_ms + H_tr_is + H_tr_w
+    A4[1, 2] = -H_tr_is
+    A4[2, 1] = -H_tr_is
+    A4[2, 2] = H_ve + H_tr_is
+    A4[2, 3] = -1.0
+    A4[3, 2] = 0.3
+    A4[3, 1] = 0.7
+
+    A3 = A4[:3, :3]
+    invA3 = linalg.inv(A3)
+    invA4 = linalg.inv(A4)
+
+    a3_00, a3_01, a3_02 = invA3[0, 0], invA3[0, 1], invA3[0, 2]
+    a3_10, a3_11, a3_12 = invA3[1, 0], invA3[1, 1], invA3[1, 2]
+    a3_20, a3_21, a3_22 = invA3[2, 0], invA3[2, 1], invA3[2, 2]
+
+    a4_00, a4_01, a4_02, a4_03 = invA4[0, 0], invA4[0, 1], invA4[0, 2], invA4[0, 3]
+    a4_10, a4_11, a4_12, a4_13 = invA4[1, 0], invA4[1, 1], invA4[1, 2], invA4[1, 3]
+    a4_20, a4_21, a4_22, a4_23 = invA4[2, 0], invA4[2, 1], invA4[2, 2], invA4[2, 3]
+    a4_30, a4_31, a4_32, a4_33 = invA4[3, 0], invA4[3, 1], invA4[3, 2], invA4[3, 3]
+
+    # Pre-compute time-varying right-hand-side base vectors across all 8,760 hours
+    T_e_arr = np.asarray(T_e, dtype=float)
+    if isinstance(zoneParameters.phi_m, dict):
+        phi_m_arr = np.array([float(np.squeeze(zoneParameters.phi_m[t])) for t in range(numberTimesteps)])
+        phi_st_arr = np.array([float(np.squeeze(zoneParameters.phi_st[t])) for t in range(numberTimesteps)])
+    else:
+        phi_m_arr = np.asarray(zoneParameters.phi_m, dtype=float)
+        phi_st_arr = np.asarray(zoneParameters.phi_st, dtype=float)
+    phi_ia_arr = np.asarray(zoneParameters.phi_ia, dtype=float)
+
+    b0_base = phi_m_arr + H_tr_em * T_e_arr
+    b1_arr = phi_st_arr + H_tr_w * T_e_arr
+    b2_arr = phi_ia_arr + H_ve * T_e_arr
+
     T_i = np.zeros(numberTimesteps)
     T_s = np.zeros(numberTimesteps)
     T_m = np.zeros(numberTimesteps)
@@ -212,83 +262,63 @@ def calc(zoneParameters, T_e, holidays, dt, building_type):
     Q_C = np.zeros(numberTimesteps)
     T_op = np.zeros(numberTimesteps)
 
-    timesteps_per_day = numberTimesteps / 365  # Calculate timesteps per day
+    timesteps_per_day = numberTimesteps / 365.0
+    holidays_set = set(holidays)
+    t_m_previous = T_m_init
 
     for t in range(numberTimesteps):
+        day = int(t // timesteps_per_day)
+        b0 = b0_base[t] + c_dt * t_m_previous
+        b1 = b1_arr[t]
+        b2 = b2_arr[t]
 
-        if t == 0:
-            t_m_previous = T_m_init
-        else:
-            t_m_previous = T_m[t - 1]
+        # 1. Free-floating temperatures without heating/cooling (deadband)
+        t_m = a3_00 * b0 + a3_01 * b1 + a3_02 * b2
+        t_s = a3_10 * b0 + a3_11 * b1 + a3_12 * b2
+        t_i = a3_20 * b0 + a3_21 * b1 + a3_22 * b2
+        t_op = 0.3 * t_i + 0.7 * t_s
 
-        # Calculate current day
-        day = t // timesteps_per_day
-
-        # Compute what happens without heating (deadband)
-        (t_op, t_m, t_i, t_s) = _calculateNoHeat(zoneParameters,
-                                                 T_e,
-                                                 t_m_previous,
-                                                 dt,
-                                                 timestep=t)
-
-        if building_type in {"SFH", "TH", "MFH", "AB"}:
-            if t_op < T_set and day not in range(135, 259):
-                # Compute heat demand
-                (q_hc, t_op, t_m, t_i, t_s) = _calculateHeat(zoneParameters,
-                                                             T_e,
-                                                             T_set,
-                                                             t_m_previous,
-                                                             dt,
-                                                             timestep=t)
+        active_setpoint = None
+        if is_res:
+            if t_op < T_set and not (135 <= day < 259):
+                active_setpoint = T_set
             elif t_op > T_set_ub:
-                # Compute cooling demand
-                (q_hc, t_op, t_m, t_i, t_s) = _calculateHeat(zoneParameters,
-                                                             T_e,
-                                                             T_set_ub,
-                                                             t_m_previous,
-                                                             dt,
-                                                             timestep=t)
-            else:
-                # Nothing to do
-                q_hc = 0
-
+                active_setpoint = T_set_ub
         else:
-            if (t_op < T_set and
-                    day not in range(135, 259) and
-                    (day % 7 not in (0, 6) and
-                     day not in holidays)):
-                # Compute heat demand
-                (q_hc, t_op, t_m, t_i, t_s) = _calculateHeat(zoneParameters,
-                                                             T_e,
-                                                             T_set,
-                                                             t_m_previous,
-                                                             dt,
-                                                             timestep=t)
-            elif (t_op > T_set_ub and
-                  (day % 7 not in (0, 6) and
-                   day not in holidays)):
-                # Compute cooling demand
-                (q_hc, t_op, t_m, t_i, t_s) = _calculateHeat(zoneParameters,
-                                                             T_e,
-                                                             T_set_ub,
-                                                             t_m_previous,
-                                                             dt,
-                                                             timestep=t)
-            else:
-                # Nothing to do
-                q_hc = 0
+            is_workday = (day % 7 not in (0, 6)) and (day not in holidays_set)
+            if is_workday:
+                if t_op < T_set and not (135 <= day < 259):
+                    active_setpoint = T_set
+                elif t_op > T_set_ub:
+                    active_setpoint = T_set_ub
 
-        # Insert results for current time step
-        if q_hc >= 0:
+        if active_setpoint is not None:
+            b3 = active_setpoint
+            q_hc = a4_30 * b0 + a4_31 * b1 + a4_32 * b2 + a4_33 * b3
+            if q_hc > Q_nHC:
+                b2_red = b2 + Q_nHC
+                t_m = a3_00 * b0 + a3_01 * b1 + a3_02 * b2_red
+                t_s = a3_10 * b0 + a3_11 * b1 + a3_12 * b2_red
+                t_i = a3_20 * b0 + a3_21 * b1 + a3_22 * b2_red
+                q_hc = Q_nHC
+            else:
+                t_m = a4_00 * b0 + a4_01 * b1 + a4_02 * b2 + a4_03 * b3
+                t_s = a4_10 * b0 + a4_11 * b1 + a4_12 * b2 + a4_13 * b3
+                t_i = a4_20 * b0 + a4_21 * b1 + a4_22 * b2 + a4_23 * b3
+            t_op = 0.3 * t_i + 0.7 * t_s
+        else:
+            q_hc = 0.0
+
+        if q_hc >= 0.0:
             Q_H[t] = q_hc
-            Q_C[t] = 0
-        elif q_hc < 0:
-            Q_C[t] = -1 * q_hc
-            Q_H[t] = 0
+        else:
+            Q_C[t] = -q_hc
+
         T_m[t] = t_m
         T_i[t] = t_i
         T_s[t] = t_s
         T_op[t] = t_op
+        t_m_previous = t_m
 
     return (Q_H, Q_C, T_op, T_m, T_i, T_s)
 

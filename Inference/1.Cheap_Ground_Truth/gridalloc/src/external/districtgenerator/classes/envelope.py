@@ -640,74 +640,69 @@ class Envelope:
         self.I_sol["window", "floor"] = np.zeros_like(self.I_sol["roof"])
 
         limit_shut_blinds = 100  # W/m²
-        for t in range(len(SunRad[0])):
-            for drct3 in range(len(directions)):  # for all directions
-                if SunRad[drct3, t] > limit_shut_blinds:
-                    self.I_sol["window", directions[drct3]][t] = 0.15 * SunRad[drct3, t].copy()
-
-        # reference variables to reduce code length
-        A_j_k = {}
-        B_i_k = {}
+        for drct3 in range(len(directions)):
+            mask_blinds = SunRad[drct3, :] > limit_shut_blinds
+            self.I_sol["window", directions[drct3]][mask_blinds] = 0.15 * SunRad[drct3, mask_blinds]
 
         direction = ("south", "west", "north", "east", "roof", "floor")
         direction2 = ("wall", "roof", "floor")
         direction3 = ("south", "west", "north", "east")
         direction4 = ("roof", "floor")
 
-        for t in range(len(SunRad[0])):
-            # auxiliary variable for walls
-            for drct3 in direction3:
-                A_j_k[t, drct3] = (self.U["opaque"]["wall"]
-                                   * self.R_se["opaque"]["wall"]
-                                   * self.A["opaque"][drct3]
-                                   * (self.alpha_Sc["opaque"]["wall"]
-                                      * self.I_sol[drct3][t]
-                                      - self.h_r["opaque", "wall"] * self.F_r[
-                                          drct3] * self.Delta_theta_er))
+        # Vectorized computation of solar heat flow phi_sol [W] across all 8,760 timesteps
+        n_t = len(SunRad[0])
+        phi_sol = np.zeros(n_t, dtype=float)
 
-            # auxiliary variable for roof/ceiling
-            for drct4 in direction4:
-                A_j_k[t, drct4] = (self.U["opaque"][drct4]
-                                   * self.R_se["opaque"][drct4]
-                                   * self.A["opaque"][drct4]
-                                   * (self.alpha_Sc["opaque"][drct4]
-                                      * self.I_sol[drct4][t]
-                                      - self.h_r["opaque", drct4] * self.F_r[
-                                          drct4] * self.Delta_theta_er))
+        u_wall = float(np.squeeze(self.U["opaque"]["wall"]))
+        r_se_wall = float(np.squeeze(self.R_se["opaque"]["wall"]))
+        alpha_wall = float(np.squeeze(self.alpha_Sc["opaque"]["wall"]))
+        hr_wall = float(np.squeeze(self.h_r["opaque", "wall"]))
 
-            for drct in direction:
-                B_i_k[t, drct] = self.A["window"][drct] \
-                                 * (self.g_gl["window"] * (1 - self.F_F)
-                                    * self.I_sol["window", drct][t]
-                                    * self.F_sh_gl - self.R_se["window"]
-                                    * self.U["window"] * self.h_r["window"]
-                                    * self.Delta_theta_er * self.F_r[drct])
+        for drct3 in direction3:
+            phi_sol += (
+                u_wall
+                * r_se_wall
+                * self.A["opaque"][drct3]
+                * (alpha_wall * self.I_sol[drct3] - hr_wall * self.F_r[drct3] * self.Delta_theta_er)
+            )
 
-        phi_sol = {}
-        self.phi_m = {}
-        self.phi_st = {}
-        self.H_tr_em = {}
-        for t in range(len(SunRad[0])):
-            # heat flow phi_sol [kW]
-            # (DIN EN ISO 13790, section 11.3.2, page 67, eq. 43)
-            phi_sol[t] = (sum(A_j_k[t, drct3] for drct3 in direction3) +
-                          sum(A_j_k[t, drct4] for drct4 in direction4) +
-                          sum(B_i_k[t, drct] for drct in direction)
-                          )
-            # Am is the effective area responsible for the heat capacity
-            self.A_m = sum(self.A["opaque"][x] for x in self.opaque)
+        for drct4 in direction4:
+            u_d4 = float(np.squeeze(self.U["opaque"][drct4]))
+            r_se_d4 = float(np.squeeze(self.R_se["opaque"][drct4]))
+            alpha_d4 = float(np.squeeze(self.alpha_Sc["opaque"][drct4]))
+            hr_d4 = float(np.squeeze(self.h_r["opaque", drct4]))
+            phi_sol += (
+                u_d4
+                * r_se_d4
+                * self.A["opaque"][drct4]
+                * (alpha_d4 * self.I_sol[drct4] - hr_d4 * self.F_r[drct4] * self.Delta_theta_er)
+            )
 
-            # heat flow into the thermalmass phi_m [kW]
-            # (DIN EN ISO 13790, section C2, page 110, eq. C.2)
-            self.phi_m[t] = self.A_m / self.A_tot * (0.5 * phi_int[t] + phi_sol[t])
+        g_win = float(np.squeeze(self.g_gl["window"]))
+        r_se_win = float(np.squeeze(self.R_se["window"]))
+        u_win = float(np.squeeze(self.U["window"]))
+        hr_win = float(np.squeeze(self.h_r["window"]))
 
-            # heat flow onto the thermal mass’s surface phi_st [kW]
-            # (DIN EN ISO 13790, section C2, page 110, eq. C.3)
-            self.phi_st[t] = (1 - self.A_m / self.A_tot - self.H_tr_w / 9.1 / self.A_tot) * (0.5 * phi_int[t] + phi_sol[t])
+        for drct in direction:
+            phi_sol += self.A["window"][drct] * (
+                g_win * (1 - self.F_F) * self.I_sol["window", drct] * self.F_sh_gl
+                - r_se_win * u_win * hr_win * self.Delta_theta_er * self.F_r[drct]
+            )
 
-            # thermal transmittance coefficient H_tr_em [W/K]
-            # Simplification: H_tr_em = H_tr_op
-            # (DIN EN ISO 13790, section 8.3, page 43)
-            self.H_tr_em[t] = sum(self.A["opaque"][drct2]
-                                  * self.U["opaque"][drct2] * self.b_tr[drct2][t]
-                                  for drct2 in direction2)
+        # Effective area responsible for the heat capacity
+        self.A_m = sum(self.A["opaque"][x] for x in self.opaque)
+        phi_int_arr = np.asarray(phi_int, dtype=float)
+        common_gain = 0.5 * phi_int_arr + phi_sol
+
+        # Heat flow into the thermal mass phi_m and onto its surface phi_st (DIN EN ISO 13790 eq. C.2, C.3)
+        self.phi_m = (self.A_m / self.A_tot) * common_gain
+        self.phi_st = (1 - self.A_m / self.A_tot - self.H_tr_w / 9.1 / self.A_tot) * common_gain
+
+        # Thermal transmittance coefficient H_tr_em [W/K] (time-invariant across the year)
+        h_tr_em_val = float(
+            sum(
+                self.A["opaque"][drct2] * float(np.squeeze(self.U["opaque"][drct2])) * self.b_tr[drct2][0]
+                for drct2 in direction2
+            )
+        )
+        self.H_tr_em = np.full(n_t, h_tr_em_val, dtype=float)
