@@ -139,8 +139,8 @@ class Config:
     RETROFIT_TARGET_YEAR = 2045                     # Target scenario year (NAP 2045)
     RETROFIT_WEIBULL_L = 45.0                       # Typical envelope component lifetime in years (Weibull scale parameter L)
     RETROFIT_WEIBULL_K = 3.5                        # Wear-out aging shape parameter k
-    RETROFIT_P_MAX_RES = 0.40                       # Max refurbishment probability for residential buildings (to be tuned to 103.8 kWh_th/(m²·a))
-    RETROFIT_P_MAX_GHD = 0.40                       # Max refurbishment probability for non-residential (GHD) buildings (to be tuned to 90.6 kWh_th/(m²·a))
+    RETROFIT_P_MAX_RES = 0.5049                     # Tuned max refurbishment probability for residential buildings (1,463 GT grids -> 103.8 kWh_th/(m²·a), job 399379)
+    RETROFIT_P_MAX_GHD = 0.4469                     # Tuned max refurbishment probability for non-residential (GHD) buildings (1,463 GT grids -> 90.6 kWh_th/(m²·a), job 399379)
     RETROFIT_PROB_LEVEL_1 = 0.85                    # Conditional probability of TABULA retrofit level 1 (conventional GEG) given renovated
     RETROFIT_PROB_LEVEL_2 = 0.15                    # Conditional probability of TABULA retrofit level 2 (ambitious BEG) given renovated
 
