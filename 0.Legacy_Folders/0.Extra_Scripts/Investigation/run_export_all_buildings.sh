@@ -4,12 +4,12 @@
 #SBATCH --output=logs/normal/%j_export_all_output.log
 #SBATCH --error=logs/errors/%j_export_all_error.log
 
-#SBATCH --clusters=serial
-#SBATCH --partition=serial_std
+#SBATCH --clusters=inter
+#SBATCH --partition=cm4_inter
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=0-00:35:00
-#SBATCH --mem-per-cpu=6200M
+#SBATCH --time=0-00:15:00
+#SBATCH --mem-per-cpu=1024M
 
 # Ensure log directories exist
 mkdir -p logs/normal logs/errors
