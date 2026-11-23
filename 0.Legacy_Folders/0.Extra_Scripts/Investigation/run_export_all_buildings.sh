@@ -32,7 +32,7 @@ echo "Export ALL script started at: $start_time"
 
 # Case 2: ALL_buildings_Pedro_PostUrbs.xlsx
 srun python3 export_all_buildings.py \
-    --input-folder "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/NAP_determine_Gebäudesanierungsrate/" \
+    --input-folder "/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/3rd_batch/4th_RUN/4.Power_Flown/" \
     --output-file "output/ALL_buildings_refurbished_buildings.xlsx"
 
 # Case 3: verification_2dmd_alloc.xlsx

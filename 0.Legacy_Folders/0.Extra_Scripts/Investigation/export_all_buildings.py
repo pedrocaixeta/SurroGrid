@@ -117,6 +117,11 @@ def process_file_helper(args):
                 df_tau = pd.read_hdf(str(h5_file), key='/urbs_out/MILP/tau_pro')
             except Exception:
                 df_tau = None
+
+            try:
+                df_cap_pro = pd.read_hdf(str(h5_file), key='/urbs_out/MILP/cap_pro')
+            except Exception:
+                df_cap_pro = None
             
             # 1. Vectorized Pre-URBS calculations
             commodities = ['electricity', 'space_heat', 'water_heat', 'mobility0']
@@ -159,6 +164,31 @@ def process_file_helper(args):
                 except Exception:
                     pass
 
+            # 3. Vectorized Post-URBS installed capacities (Heat Pump & Heating Rod)
+            hp_inst_caps = {}
+            hr_inst_caps = {}
+
+            if df_cap_pro is not None:
+                try:
+                    if isinstance(df_cap_pro, pd.DataFrame):
+                        df_cap_pro = df_cap_pro.iloc[:, 0]
+
+                    if 'stf' in df_cap_pro.index.names:
+                        latest_stf = df_cap_pro.index.get_level_values('stf').max()
+                        df_cap_pro = df_cap_pro.xs(latest_stf, level='stf')
+
+                    pro_vals = df_cap_pro.index.get_level_values('pro')
+
+                    hp_mask = pro_vals.isin(['heatpump_air', 'heatpump_grd'])
+                    if hp_mask.any():
+                        hp_inst_caps = df_cap_pro[hp_mask].groupby(level='sit').sum().to_dict()
+
+                    hr_mask = pro_vals == 'heatpump_booster'
+                    if hr_mask.any():
+                        hr_inst_caps = df_cap_pro[hr_mask].groupby(level='sit').sum().to_dict()
+                except Exception:
+                    pass
+
             # Populate lists using dictionary lookup
             res_pylovo = []
             res_in_service = []
@@ -169,6 +199,8 @@ def process_file_helper(args):
             res_post_imp_total = []
             res_post_exp_peak = []
             res_post_exp_total = []
+            res_hp_inst_cap = []
+            res_hr_inst_cap = []
 
             for idx, row in massive.iterrows():
                 bus_id = row.get('bus')
@@ -188,6 +220,8 @@ def process_file_helper(args):
                 res_post_imp_total.append(post_import_totals.get(bus_id, 0.0))
                 res_post_exp_peak.append(post_export_peaks.get(bus_id, 0.0))
                 res_post_exp_total.append(post_export_totals.get(bus_id, 0.0))
+                res_hp_inst_cap.append(hp_inst_caps.get(bus_id, 0.0))
+                res_hr_inst_cap.append(hr_inst_caps.get(bus_id, 0.0))
 
             # Attempt to read RegioStar7 class from region data
             regiostar = ''
@@ -244,6 +278,8 @@ def process_file_helper(args):
             massive['Total Energy Import Post-URBS (kWh)'] = res_post_imp_total
             massive['Peak Energy Export Post-URBS (kW)'] = res_post_exp_peak
             massive['Total Energy Export Post-URBS (kWh)'] = res_post_exp_total
+            massive['Heat Pump Installed Capacity (kW)'] = res_hp_inst_cap
+            massive['Heating Rod Installed Capacity (kW)'] = res_hr_inst_cap
 
             # ---------------------------------------------------------
             # DECIDE WHICH COLUMNS TO OUTPUT
@@ -260,7 +296,8 @@ def process_file_helper(args):
                 'Peak Water Heat Load Pre-URBS (kW)', 'Total Water Heat Energy Pre-URBS (kWh)',
                 'Peak Mobility0 Load Pre-URBS (kW)', 'Total Mobility0 Energy Pre-URBS (kWh)',
                 'Peak Energy Import Post-URBS (kW)', 'Total Energy Import Post-URBS (kWh)',
-                'Peak Energy Export Post-URBS (kW)', 'Total Energy Export Post-URBS (kWh)'
+                'Peak Energy Export Post-URBS (kW)', 'Total Energy Export Post-URBS (kWh)',
+                'Heat Pump Installed Capacity (kW)', 'Heating Rod Installed Capacity (kW)'
             ]
             
             # Get the list of all original columns from the H5 file's building data
