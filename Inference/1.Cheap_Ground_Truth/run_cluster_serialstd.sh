@@ -10,7 +10,7 @@
 #SBATCH --partition=cm4_inter
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=0-00:40:00
+#SBATCH --time=0-00:11:00
 #SBATCH --mem=8G
 
 set -euo pipefail

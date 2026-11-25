@@ -15,16 +15,21 @@ from src.classes.resource_report import resource_report
 from config import config
 
 
-def run_demand_allocation(inputfile_id, n_cpu=1, input_dir=None, output_dir=None):
+def run_demand_allocation(inputfile_id, n_cpu=1, input_dir=None, output_dir=None, grid_filename=None):
     """Run solar, electricity, space/water heat, HP COP, and car-count sampling.
 
     Writes the copied working .h5 file into `output_dir` (default `config.STORAGE_DIR`)
     without appending the final `_DmdAllocated` suffix yet, and returns its path.
+    Passing `grid_filename` directly skips scanning `input_dir` with `os.listdir`
+    (much faster on network filesystems containing 85k+ grids).
     """
     input_dir = input_dir if input_dir is not None else config.DATA_GRID_DIR
     output_dir = output_dir if output_dir is not None else config.STORAGE_DIR
 
-    inputfile = find_grid_file_by_id(input_dir, inputfile_id)
+    if grid_filename is not None:
+        inputfile = grid_filename
+    else:
+        inputfile = find_grid_file_by_id(input_dir, inputfile_id)
 
     settings = {
         "grid_filename": inputfile,

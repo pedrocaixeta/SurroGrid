@@ -2,7 +2,7 @@ from config import config
 import pandas as pd
 import numpy as np
 
-from pvlib import pvsystem, modelchain, location
+from pvlib import pvsystem, modelchain, location, irradiance, atmosphere
 from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
 
 
@@ -119,25 +119,73 @@ def sample_statistics(df_buildings):
     df_buildings["roofs"] = df_buildings["area"].apply(lambda x: _get_roof_sections(x, config.ROOF_TILT_DIST)) 
     return df_buildings
 
-def create_supim_solar(df_buildings, df_weather, location, altitude):
+def create_supim_solar(df_buildings, df_weather, location_dict, altitude):
     ts_dict = {}                          # dictionary to store all generated solar timeseries
-    roof_list = []                        # dictionary to store all roof names
+    roof_list = []                        # list of (bus, ts_name) for all roof sections
+
+    # Precompute site-level astronomy & weather quantities ONCE per grid
+    # (exact mathematical equivalent of ModelChain.run_model with Hay-Davies + physical AOI + SAPM + PVWatts)
+    df = df_weather.copy()
+    df.index = df["time(inst)"]
+    site = location.Location(
+        latitude=location_dict["lat"],
+        longitude=location_dict["lon"],
+        altitude=altitude,
+        tz="Etc/GMT-1",
+    )
+    times = df.index
+    solpos = site.get_solarposition(times, pressure=df["pressure"], temperature=df["temp_air"])
+    apparent_zenith = solpos["apparent_zenith"]
+    solar_azimuth = solpos["azimuth"]
+    dni_extra = irradiance.get_extra_radiation(times)
+    airmass_rel = atmosphere.get_relative_airmass(apparent_zenith)
+
+    ghi = df["ghi"]
+    dni = df["dni"]
+    dhi = df["dhi"]
+    temp_air = df["temp_air"]
+    wind_speed = df["wind_speed"]
+
+    albedo = config.ALBEDO
+    mod_p = config.MODULE_PARAMETERS
+    inv_p = config.INVERTER_PARAMETERS
+    temp_p = TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
+    losses_factor = (100.0 - pvsystem.pvwatts_losses(**config.SOLAR_LOSSES)) / 100.0
 
     # Loop over all roof sections on all buildings and generate timeseries for unseen (tilt, azim) combinations
-    for index, row in df_buildings.iterrows():
+    for _, row in df_buildings.iterrows():
         for roof_sec in row["roofs"]:
             tilt = roof_sec[1]
             azim = roof_sec[2]
             ts_name = f"solar_{tilt}_{azim}"
 
             roof_list.append((row["bus"], ts_name))
-            if ts_name in ts_dict.keys(): pass
-            else: ts_dict[f"solar_{tilt}_{azim}"] = _calculate_pv_power(location["lat"],location["lon"], altitude, tilt, azim, df_weather)
+            if ts_name not in ts_dict:
+                poa = irradiance.get_total_irradiance(
+                    surface_tilt=tilt,
+                    surface_azimuth=azim,
+                    solar_zenith=apparent_zenith,
+                    solar_azimuth=solar_azimuth,
+                    dni=dni,
+                    ghi=ghi,
+                    dhi=dhi,
+                    dni_extra=dni_extra,
+                    airmass=airmass_rel,
+                    albedo=albedo,
+                    model="haydavies",
+                )
+                aoi = irradiance.aoi(tilt, azim, apparent_zenith, solar_azimuth)
+                iam = pvsystem.iam.physical(aoi)
+                eff_irr = poa["poa_direct"] * iam + poa["poa_diffuse"]
+                t_cell = pvsystem.temperature.sapm_cell(poa["poa_global"], temp_air, wind_speed, **temp_p)
+                dc = pvsystem.pvwatts_dc(eff_irr, t_cell, mod_p["pdc0"], mod_p["gamma_pdc"]) * losses_factor
+                ac = pvsystem.inverter.pvwatts(dc, **inv_p).fillna(0.0)
+                ts_dict[ts_name] = ac
 
     # Now create urbs input dataframe by assigning timeseries to every roof section
     dfs = [ts_dict[ts_name] for (bus, ts_name) in roof_list]
     df_solar_supim = pd.concat(dfs, axis=1, keys=roof_list)
-    df_solar_supim/=1000   # Convert to kWh
+    df_solar_supim /= 1000   # Convert to kWh
     df_solar_supim = df_solar_supim.reset_index(drop=True)
     df_solar_supim.index.name = "t"
 

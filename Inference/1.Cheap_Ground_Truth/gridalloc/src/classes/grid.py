@@ -124,7 +124,7 @@ class Grid:
             col_subsets = [[(col, "electricity") for col in subset["bus"].values] for subset in building_subsets]
             job_args = [(subset.reset_index(drop=True), df_elec_input[col_subsets[i]], df_elec_res_input[col_subsets[i]], df_elec_ghd_input[col_subsets[i]], [np.array(df_wth_input[col]) for col in ["dni", "dhi", "temp_air"]], self.plz)
                          for i, subset in enumerate(building_subsets)]
-            with Pool() as pool:
+            with Pool(processes=self.settings["n_cpu"]) as pool:
                 results = pool.starmap(heat.generate_heat_demands, job_args)
             # Concatenate results
             self.df_demand_heat_space = pd.concat([results[i][0] for i in range(len(results))], axis=1).sort_index(axis=1, level=[0])
