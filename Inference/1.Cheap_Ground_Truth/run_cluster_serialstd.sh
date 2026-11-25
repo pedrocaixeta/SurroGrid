@@ -4,8 +4,10 @@
 #SBATCH --output=logs/normal/%j_output.log
 #SBATCH --error=logs/errors/%j_error.log
 
-#SBATCH --clusters=serial
-#SBATCH --partition=serial_std
+# Default: cm4_inter (8h max walltime limit; 1 grid takes ~2-10 min on 4 CPUs)
+# Alternative if using serial cluster: --clusters=serial --partition=serial_std
+#SBATCH --clusters=inter
+#SBATCH --partition=cm4_inter
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=0-00:40:00
