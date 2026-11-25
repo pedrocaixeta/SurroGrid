@@ -1,9 +1,11 @@
 import pandas as pd
 import os
 from pathlib import Path
+from collections import defaultdict
 import multiprocessing
 import json
 import io
+import warnings
 import h5py
 
 # Disable HDF5 file locking to avoid errors when accessing files over WSL mounts or network shares
@@ -475,11 +477,12 @@ def process_file_helper(args):
         
     return None
 
-def find_and_export_all_buildings(input_folder, output_file):
+def find_and_export_all_buildings(input_folder, output_file, file_pattern="*pwrflw.h5"):
     search_path = Path(input_folder)
     print(f"\n=======================================================")
-    print(f"Processing ALL grids in Folder (No filter)")
+    print(f"Processing grids in Folder")
     print(f"Input Folder:  {search_path.absolute()}")
+    print(f"File Pattern:  {file_pattern}")
     print(f"Output File:   {output_file}")
     print(f"=======================================================")
     
@@ -488,21 +491,41 @@ def find_and_export_all_buildings(input_folder, output_file):
         print(f"ERROR: The folder '{input_folder}' does not exist!")
         return
 
-    # Find all .h5 files in the folder (but NOT in sub-folders, to avoid backups)
-    h5_files = list(search_path.glob("*.h5"))
+    # Find matching .h5 files in the folder (NOT in sub-folders, to avoid backups)
+    h5_files = sorted(search_path.glob(file_pattern))
     total_files = len(h5_files)
-    print(f"Found {total_files} .h5 files to check.\n")
+    print(f"Found {total_files} files matching '{file_pattern}' to check.\n")
     
-    # Prepare arguments for files
+    # Prepare arguments for files and track files per Grid Index
     valid_files_args = []
+    files_by_grid_idx = defaultdict(list)
     for file_idx, h5_file in enumerate(h5_files):
         grid_idx = extract_index_from_filename(h5_file.name)
         plz = extract_plz_from_filename(h5_file.name)
+        if grid_idx is not None:
+            files_by_grid_idx[grid_idx].append(h5_file.name)
         valid_files_args.append((file_idx, total_files, grid_idx, plz, h5_file))
             
     if not valid_files_args:
         print("No files found.")
         return
+
+    # Warn (do not fail) if duplicate Grid Index values are detected across matched files
+    duplicate_grids = {
+        grid_idx: filenames
+        for grid_idx, filenames in sorted(files_by_grid_idx.items())
+        if len(filenames) > 1
+    }
+    if duplicate_grids:
+        details = "; ".join(
+            f"Grid {grid_idx} ({len(filenames)} files: {', '.join(filenames)})"
+            for grid_idx, filenames in duplicate_grids.items()
+        )
+        warnings.warn(
+            f"Detected {len(duplicate_grids)} duplicate Grid Index value(s) in '{search_path}': {details}",
+            UserWarning,
+            stacklevel=2,
+        )
         
     # Get the number of CPU cores to use.
     num_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", multiprocessing.cpu_count()))
@@ -536,9 +559,14 @@ def find_and_export_all_buildings(input_folder, output_file):
 # This tells Python to run the function when you start the script
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Export building stats from all H5 grid files.")
+    parser = argparse.ArgumentParser(description="Export building stats from H5 grid files.")
     parser.add_argument("--input-folder", required=True, help="Path to folder containing H5 files.")
     parser.add_argument("--output-file", required=True, help="Path to output Excel file.")
+    parser.add_argument(
+        "--pattern",
+        default="*pwrflw.h5",
+        help="Glob pattern for selecting H5 files in --input-folder (default: '*pwrflw.h5').",
+    )
     
     args = parser.parse_args()
-    find_and_export_all_buildings(args.input_folder, args.output_file)
+    find_and_export_all_buildings(args.input_folder, args.output_file, file_pattern=args.pattern)
