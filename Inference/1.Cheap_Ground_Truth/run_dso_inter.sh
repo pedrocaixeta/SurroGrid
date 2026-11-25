@@ -22,9 +22,9 @@
 # - Each array task runs ONE persistent Python process with a 4-worker pool
 #   (ProcessPoolExecutor, n_cpu=1 per grid) using the optimized Step 1 code
 #   (~2-7s wall/grid on 4 CPUs).
-# - With GRIDS_PER_TASK=450 and TIME_PER_GRID_SEC=40, each full task requests
-#   5h 00m (under cm4_inter's 8h limit), and ALL 10 DSOs combined (85,613 grids)
-#   fit in 194 tasks total (< 200 tasks)!
+# - With GRIDS_PER_TASK=450 and TIME_PER_GRID_SEC=16, each full task requests
+#   2h 00m (fast SLURM backfill, well under cm4_inter's 8h limit), and ALL 10
+#   DSOs combined (85,613 grids) fit in 194 tasks total (< 200 tasks)!
 # - Submissions are strictly capped at MAX_TASKS=199 (< 200 tasks).
 # ==============================================================================
 
@@ -47,10 +47,10 @@ PARTITION="${PARTITION:-cm4_inter}"
 QOS="${QOS:-}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-4}"
 MEM="${MEM:-10G}"                              # 4 concurrent workers (~0.5-1.0 GB peak RSS each)
-TIME_PER_GRID_SEC="${TIME_PER_GRID_SEC:-40}"   # Walltime budget per grid [s] (actual ~2-7s wall on 4 CPUs)
+TIME_PER_GRID_SEC="${TIME_PER_GRID_SEC:-16}"   # Walltime budget per grid [s] (actual ~2-7s wall on 4 CPUs)
 
 # Array scaling defaults
-# 450 grids/task * 40s = 300 min = 5h 00m per task (under cm4_inter 8h limit; actual ~15-60 min).
+# 450 grids/task * 16s = 120 min = 2h 00m per task (fast SLURM backfill; actual ~15-60 min).
 # All 10 Bavarian DSOs combined (85,613 grids) total 194 tasks (< 200 tasks)!
 MAX_CONCURRENT="${MAX_CONCURRENT:-20}"         # Max simultaneously running array tasks (%M)
 MAX_TASKS="${MAX_TASKS:-199}"                  # Hard cap on submitted array tasks (< 200)
