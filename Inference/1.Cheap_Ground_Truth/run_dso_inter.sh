@@ -1,17 +1,25 @@
 #!/bin/bash
 # ==============================================================================
 # Self-submitting SLURM job-array runner for Step 1 (1.Cheap_Ground_Truth)
-# across all raw grids belonging to one DSO on LRZ's `inter` (`cm4_inter`) queue.
+# on the LRZ Linux Cluster (CoolMUC-4).
+#
+# Why `cm4_tiny` is the default preset (per LRZ CoolMUC-4 docs):
+#   - `inter / cm4_inter` is an interactive partition capped at 1-2 submitted
+#     jobs per user (`AssocMaxSubmitJobLimit` if you submit multiple arrays!).
+#   - `cm4 / cm4_tiny` (mandatory `--qos=cm4_tiny`) is LRZ's official single-node
+#     parallel batch / task-farming partition: 17-112 cores/job, up to 4 running
+#     jobs simultaneously, up to 24h walltime.
+#   - With 56 CPUs/task and 22,000 grids/task, ALL 85,613 Bavarian grids fit
+#     into ONLY 4 parallel tasks (~1-4h actual walltime, <=6h 00m requested)!
 #
 # Usage (run directly on the LRZ login node — do NOT wrap with `sbatch`):
-#   ./run_dso_inter.sh SWU --dry-run            # preview counts & sbatch command
-#   ./run_dso_inter.sh SWU                      # submit all pending SWU grids
-#   ./run_dso_inter.sh SWU --limit 5            # smoke-test 5 smallest pending grids
-#   ./run_dso_inter.sh nVNB                     # auto-caps at <=199 tasks; re-run for next wave
-#   ./run_dso_inter.sh nVNB --part 1/2          # or submit explicit halves (153 tasks each)
-#   ./run_dso_inter.sh ByWrk --part 1/3         # or submit explicit thirds (162 tasks each)
+#   ./run_dso_inter.sh ALL --dry-run               # preview ALL pending grids on cm4_tiny
+#   ./run_dso_inter.sh ALL                         # submit ALL pending grids in <=4 tasks (56 CPUs each)
+#   ./run_dso_inter.sh MFrak,RegB,SWA              # submit a custom comma-separated group of DSOs
+#   ./run_dso_inter.sh SWU --limit 5               # smoke-test 5 smallest pending grids
+#   ./run_dso_inter.sh ALL --preset cm4_inter      # run 1 single 56-CPU job on inter/cm4_inter (<=8h)
 #
-# Valid DSO_SHORT codes (ordered smallest -> largest):
+# Valid DSO_SHORT codes (ordered smallest -> largest), or `ALL`, or comma-separated list:
 #   SWU    (356) | MFrak   (841) | RegB    (858) | SWA     (880) | AllgN (1,651)
 #   SWM  (4,230) | Nrgie (6,446) | LEW   (7,011) | nVNB (24,469) | ByWrk (38,871)
 #
@@ -19,13 +27,8 @@
 # - Grids are sorted by raw .h5 file size ascending (smallest grids run first).
 # - Already completed `*_DmdAllocated.h5` files are automatically skipped (use
 #   `--overwrite` to force re-running existing outputs).
-# - Each array task runs ONE persistent Python process with a 4-worker pool
-#   (ProcessPoolExecutor, n_cpu=1 per grid) using the optimized Step 1 code
-#   (~2-7s wall/grid on 4 CPUs).
-# - With GRIDS_PER_TASK=450 and TIME_PER_GRID_SEC=16, each full task requests
-#   2h 00m (fast SLURM backfill, well under cm4_inter's 8h limit), and ALL 10
-#   DSOs combined (85,613 grids) fit in 194 tasks total (< 200 tasks)!
-# - Submissions are strictly capped at MAX_TASKS=199 (< 200 tasks).
+# - Each array task runs ONE persistent Python process with a ProcessPoolExecutor
+#   of `CPUS_PER_TASK` workers (n_cpu=1 per grid).
 # ==============================================================================
 
 set -euo pipefail
@@ -33,30 +36,29 @@ set -euo pipefail
 # ---------------------------------------------------------------------------- #
 # ------------------------- User Configuration ------------------------------- #
 # ---------------------------------------------------------------------------- #
-DSO_SHORT="${DSO_SHORT:-SWU}"
+DSO_SHORT="${DSO_SHORT:-ALL}"
+PRESET="${PRESET:-cm4_tiny}"   # cm4_tiny (default, 4x56 CPUs) | cm4_inter (1x56 CPUs, <=8h)
 
 # Input raw grids folder and Step 1 output folder (matches pipeline_config.py)
 RAW_GRID_DIR="${RAW_GRID_DIR:-/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/0.Raw_grids}"
 OUTPUT_DIR="${OUTPUT_DIR:-/dss/dssfs05/lwp-dss-0003/pn98cu/pn98cu-dss-0001/PedroC/INFERENCE/Step_by_Step/1.Cheap_Ground_Truthed}"
 OUTPUT_SUFFIX="_DmdAllocated"
 
-# SLURM cluster / resource defaults (per array task)
-# cm4_inter has an 8h max walltime limit; no --qos needed on inter cluster.
-CLUSTER="${CLUSTER:-inter}"
-PARTITION="${PARTITION:-cm4_inter}"
-QOS="${QOS:-}"
-CPUS_PER_TASK="${CPUS_PER_TASK:-4}"
-MEM="${MEM:-10G}"                              # 4 concurrent workers (~0.5-1.0 GB peak RSS each)
-TIME_PER_GRID_SEC="${TIME_PER_GRID_SEC:-16}"   # Walltime budget per grid [s] (actual ~2-7s wall on 4 CPUs)
+# SLURM cluster / resource overrides (empty => populated from PRESET below)
+CLUSTER="${CLUSTER:-}"
+PARTITION="${PARTITION:-}"
+QOS="${QOS:-__PRESET__}"
+CPUS_PER_TASK="${CPUS_PER_TASK:-}"
+MEM="${MEM:-__PRESET__}"                       # Empty string omits --mem (uses LRZ ~2.1 GiB/core default)
+CPU_SEC_PER_GRID="${CPU_SEC_PER_GRID:-55}"     # CPU-seconds budgeted per grid (4x SWU mean 13.7s; walltime = grids*cpu_sec/cpus)
+TIME_PER_GRID_SEC_OVERRIDE=""                  # Optional explicit wall-seconds/grid override
 
-# Array scaling defaults
-# 450 grids/task * 16s = 120 min = 2h 00m per task (fast SLURM backfill; actual ~15-60 min).
-# All 10 Bavarian DSOs combined (85,613 grids) total 194 tasks (< 200 tasks)!
-MAX_CONCURRENT="${MAX_CONCURRENT:-20}"         # Max simultaneously running array tasks (%M)
-MAX_TASKS="${MAX_TASKS:-199}"                  # Hard cap on submitted array tasks (< 200)
-GRIDS_PER_TASK="${GRIDS_PER_TASK:-450}"        # Grids processed per array task (4-worker pool)
+# Array scaling overrides (empty => populated from PRESET below)
+MAX_CONCURRENT="${MAX_CONCURRENT:-}"
+MAX_TASKS="${MAX_TASKS:-}"
+GRIDS_PER_TASK="${GRIDS_PER_TASK:-}"
 MAX_GRIDS="${MAX_GRIDS:-0}"                    # 0 = all pending grids; >0 = cap for testing
-PART_SPEC="${PART_SPEC:-1/1}"                  # Split DSO into N parts, run part K (e.g. 1/2, 1/3)
+PART_SPEC="${PART_SPEC:-1/1}"                  # Split matched grids into N parts, run part K (e.g. 1/2)
 OVERWRITE="${OVERWRITE:-0}"                    # 0 = skip already done; 1 = re-run all
 
 # Resolve script directory (handles both direct invocation and SLURM spool copies)
@@ -169,21 +171,31 @@ DRY_RUN=0
 
 usage() {
   cat <<EOF
-Usage: ./$(basename "$0") [DSO_SHORT] [options]
+Usage: ./$(basename "$0") [DSO_SHORT|ALL|DSO1,DSO2,...] [options]
+
+Presets (--preset NAME):
+  cm4_tiny   (default) --clusters=cm4 --partition=cm4_tiny --qos=cm4_tiny
+             56 CPUs/task, 22,000 grids/task, max 4 tasks (ALL 85,613 grids in 4 parallel jobs!)
+  cm4_inter  --clusters=inter --partition=cm4_inter
+             56 CPUs/task, 18,000 grids/task, max 1 task (fits inter's 1-2 job limit, <=8h)
 
 Options:
-  --part K/N                 Split DSO's matched grids into N equal chunks and run part K (default: 1/1)
+  --preset NAME              Cluster/partition preset: cm4_tiny (default) or cm4_inter
+  --part K/N                 Split matched grids into N equal chunks and run part K (default: 1/1)
   --dry-run                  Scan directories and print sbatch command without submitting
   --limit N                  Process at most N pending grids (default: 0 = all)
   --overwrite                Re-run grids even if *_DmdAllocated.h5 already exists
-  --grids-per-task K         Grids processed per array task (default: ${GRIDS_PER_TASK})
-  --max-tasks T              Max array tasks per submission, < 200 (default: ${MAX_TASKS})
-  --max-concurrent M         Max concurrent array tasks via SLURM %M (default: ${MAX_CONCURRENT})
-  --time-per-grid-sec SEC    Walltime seconds allocated per grid (default: ${TIME_PER_GRID_SEC})
-  --time-per-grid MIN        Walltime minutes allocated per grid (sets --time-per-grid-sec = MIN*60)
-  --cluster NAME             SLURM cluster (default: ${CLUSTER})
-  --partition NAME           SLURM partition (default: ${PARTITION})
-  --qos NAME                 SLURM QoS; empty string omits --qos (default: "${QOS}")
+  --cpus N                   CPUs (parallel workers) per array task (preset default: 56)
+  --mem SIZE                 SLURM --mem per task; empty omits --mem (default: "")
+  --grids-per-task K         Grids processed per array task (preset default: 22000 or 18000)
+  --max-tasks T              Max array tasks per submission (preset default: 4 or 1)
+  --max-concurrent M         Max concurrent array tasks via SLURM %M (preset default: 4 or 1)
+  --cpu-sec-per-grid SEC     CPU-seconds budgeted per grid (default: ${CPU_SEC_PER_GRID})
+  --time-per-grid-sec SEC    Explicit walltime seconds per grid (overrides --cpu-sec-per-grid)
+  --time-per-grid MIN        Explicit walltime minutes per grid
+  --cluster NAME             Override SLURM cluster
+  --partition NAME           Override SLURM partition
+  --qos NAME                 Override SLURM QoS (empty string omits --qos)
   --input-dir PATH           Override RAW_GRID_DIR
   --output-dir PATH          Override OUTPUT_DIR
   -h, --help                 Show this help message
@@ -192,6 +204,8 @@ EOF
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --preset)
+      PRESET="$2"; shift 2 ;;
     --part)
       PART_SPEC="$2"; shift 2 ;;
     --dry-run)
@@ -200,16 +214,22 @@ while [ "$#" -gt 0 ]; do
       MAX_GRIDS="$2"; shift 2 ;;
     --overwrite)
       OVERWRITE=1; shift ;;
+    --cpus)
+      CPUS_PER_TASK="$2"; shift 2 ;;
+    --mem)
+      MEM="$2"; shift 2 ;;
     --grids-per-task)
       GRIDS_PER_TASK="$2"; shift 2 ;;
     --max-tasks)
       MAX_TASKS="$2"; shift 2 ;;
     --max-concurrent)
       MAX_CONCURRENT="$2"; shift 2 ;;
+    --cpu-sec-per-grid)
+      CPU_SEC_PER_GRID="$2"; shift 2 ;;
     --time-per-grid-sec)
-      TIME_PER_GRID_SEC="$2"; shift 2 ;;
+      TIME_PER_GRID_SEC_OVERRIDE="$2"; shift 2 ;;
     --time-per-grid)
-      TIME_PER_GRID_SEC=$(( $2 * 60 )); shift 2 ;;
+      TIME_PER_GRID_SEC_OVERRIDE=$(( $2 * 60 )); shift 2 ;;
     --cluster)
       CLUSTER="$2"; shift 2 ;;
     --partition)
@@ -228,6 +248,34 @@ while [ "$#" -gt 0 ]; do
       DSO_SHORT="$1"; shift ;;
   esac
 done
+
+# Populate defaults from selected LRZ preset for any unset resource parameters
+case "$PRESET" in
+  cm4_tiny)
+    CLUSTER="${CLUSTER:-cm4}"
+    PARTITION="${PARTITION:-cm4_tiny}"
+    [ "$QOS" = "__PRESET__" ] && QOS="cm4_tiny"
+    CPUS_PER_TASK="${CPUS_PER_TASK:-56}"
+    [ "$MEM" = "__PRESET__" ] && MEM=""
+    GRIDS_PER_TASK="${GRIDS_PER_TASK:-22000}"
+    MAX_TASKS="${MAX_TASKS:-4}"
+    MAX_CONCURRENT="${MAX_CONCURRENT:-4}"
+    ;;
+  cm4_inter)
+    CLUSTER="${CLUSTER:-inter}"
+    PARTITION="${PARTITION:-cm4_inter}"
+    [ "$QOS" = "__PRESET__" ] && QOS=""
+    CPUS_PER_TASK="${CPUS_PER_TASK:-56}"
+    [ "$MEM" = "__PRESET__" ] && MEM=""
+    GRIDS_PER_TASK="${GRIDS_PER_TASK:-18000}"
+    MAX_TASKS="${MAX_TASKS:-1}"
+    MAX_CONCURRENT="${MAX_CONCURRENT:-1}"
+    ;;
+  *)
+    echo "ERROR: Unknown --preset '$PRESET' (expected 'cm4_tiny' or 'cm4_inter')." >&2
+    exit 1
+    ;;
+esac
 
 # Validate --part K/N
 if ! [[ "$PART_SPEC" =~ ^[0-9]+/[0-9]+$ ]]; then
@@ -258,7 +306,8 @@ PART_TAG=""
 if [ "$PART_TOTAL" -gt 1 ]; then
   PART_TAG="_p${PART_IDX}of${PART_TOTAL}"
 fi
-MANIFEST_FILE="${SCRIPT_DIR}/logs/manifests/${DSO_SHORT}${PART_TAG}_${TIMESTAMP}.txt"
+SAFE_DSO_TAG="${DSO_SHORT//,/_}"
+MANIFEST_FILE="${SCRIPT_DIR}/logs/manifests/${SAFE_DSO_TAG}${PART_TAG}_${TIMESTAMP}.txt"
 
 # Compute maximum grids allowed in a single submission to stay <= MAX_TASKS
 if [ "$MAX_TASKS" -lt 1 ] || [ "$GRIDS_PER_TASK" -lt 1 ]; then
@@ -291,7 +340,8 @@ if not overwrite and os.path.isdir(out_dir):
             if entry.name.endswith(f"{out_suffix}.h5"):
                 done_files.add(entry.name)
 
-# Scan raw grids matching second underscore token == dso_short, recording file size
+# Scan raw grids matching DSO_SHORT (`ALL`, single DSO, or comma-separated DSOs), recording file size
+dso_filter = None if dso_short.upper() == "ALL" else {s.strip() for s in dso_short.split(",") if s.strip()}
 matched = []
 with os.scandir(raw_dir) as it:
     for entry in it:
@@ -299,7 +349,7 @@ with os.scandir(raw_dir) as it:
         if not name.endswith(".h5") or name.endswith(exclude_suffixes):
             continue
         parts = name.split("_")
-        if len(parts) >= 2 and parts[1] == dso_short:
+        if dso_filter is None or (len(parts) >= 2 and parts[1] in dso_filter):
             try:
                 fsize = entry.stat().st_size
             except OSError:
@@ -368,19 +418,24 @@ EFFECTIVE_GRIDS_PER_TASK="$GRIDS_PER_TASK"
 if [ "$WAVE_COUNT" -lt "$GRIDS_PER_TASK" ]; then
   EFFECTIVE_GRIDS_PER_TASK="$WAVE_COUNT"
 fi
-TOTAL_MIN=$(( (EFFECTIVE_GRIDS_PER_TASK * TIME_PER_GRID_SEC + 59) / 60 ))
+if [ -n "$TIME_PER_GRID_SEC_OVERRIDE" ]; then
+  TOTAL_MIN=$(( (EFFECTIVE_GRIDS_PER_TASK * TIME_PER_GRID_SEC_OVERRIDE + 59) / 60 ))
+else
+  # Scale walltime automatically with CPUS_PER_TASK (wall_sec = grids * cpu_sec_per_grid / cpus)
+  TOTAL_MIN=$(( (EFFECTIVE_GRIDS_PER_TASK * CPU_SEC_PER_GRID + CPUS_PER_TASK * 60 - 1) / (CPUS_PER_TASK * 60) ))
+fi
 if [ "$TOTAL_MIN" -lt 15 ]; then
   TOTAL_MIN=15
 fi
 
-# Enforce walltime caps: <= 8h on cm4_inter, <= 12h everywhere else
+# Enforce walltime caps: <= 8h on cm4_inter, <= 12h everywhere else (e.g. cm4_tiny allows 24h)
 MAX_ALLOWED_MIN=720
 if [ "$PARTITION" = "cm4_inter" ]; then
   MAX_ALLOWED_MIN=480
 fi
 if [ "$TOTAL_MIN" -gt "$MAX_ALLOWED_MIN" ]; then
   echo "ERROR: Computed per-task walltime (${TOTAL_MIN} min) exceeds ${MAX_ALLOWED_MIN} min limit for ${PARTITION}." >&2
-  echo "       Lower --grids-per-task or --time-per-grid." >&2
+  echo "       Lower --grids-per-task or --cpu-sec-per-grid, or increase --cpus." >&2
   exit 1
 fi
 
@@ -389,7 +444,7 @@ HOURS=$(( (TOTAL_MIN % 1440) / 60 ))
 MINS=$(( TOTAL_MIN % 60 ))
 WALLTIME=$(printf "%d-%02d:%02d:00" "$DAYS" "$HOURS" "$MINS")
 
-JOB_NAME="cgt_${DSO_SHORT}${PART_TAG}"
+JOB_NAME="cgt_${SAFE_DSO_TAG:0:18}${PART_TAG}"
 
 SBATCH_CMD=(
   sbatch
@@ -403,17 +458,22 @@ fi
 SBATCH_CMD+=(
   --ntasks=1
   --cpus-per-task="$CPUS_PER_TASK"
-  --mem="$MEM"
+)
+if [ -n "$MEM" ]; then
+  SBATCH_CMD+=(--mem="$MEM")
+fi
+SBATCH_CMD+=(
   --time="$WALLTIME"
   --array="1-${NUM_TASKS}%${MAX_CONCURRENT}"
   --output="logs/normal/%A_%a_output.log"
   --error="logs/errors/%A_%a_error.log"
-  --export="ALL,MANIFEST_FILE=${MANIFEST_FILE},DSO_SHORT=${DSO_SHORT},PART_SPEC=${PART_SPEC},GRIDS_PER_TASK=${GRIDS_PER_TASK},RAW_GRID_DIR=${RAW_GRID_DIR},OUTPUT_DIR=${OUTPUT_DIR},OVERWRITE=${OVERWRITE}"
+  --export="ALL,MANIFEST_FILE=${MANIFEST_FILE},DSO_SHORT=${SAFE_DSO_TAG},PART_SPEC=${PART_SPEC},GRIDS_PER_TASK=${GRIDS_PER_TASK},RAW_GRID_DIR=${RAW_GRID_DIR},OUTPUT_DIR=${OUTPUT_DIR},OVERWRITE=${OVERWRITE}"
   "$SCRIPT_PATH"
 )
 
+MEM_DISPLAY="${MEM:-default (~2.1G/core)}"
 echo "  Array tasks     : 1-${NUM_TASKS} (max ${MAX_CONCURRENT} concurrent, ${GRIDS_PER_TASK} grid(s)/task)"
-echo "  Per-task res.   : ${CPUS_PER_TASK} CPUs, ${MEM} RAM, walltime ${WALLTIME} (${CLUSTER}/${PARTITION}${QOS:+, qos=${QOS}})"
+echo "  Per-task res.   : ${CPUS_PER_TASK} CPUs, RAM ${MEM_DISPLAY}, walltime ${WALLTIME} (${CLUSTER}/${PARTITION}${QOS:+, qos=${QOS}})"
 echo "  First grid IDs  : ${PREVIEW_IDS}"
 
 if [ "$DRY_RUN" -eq 1 ]; then

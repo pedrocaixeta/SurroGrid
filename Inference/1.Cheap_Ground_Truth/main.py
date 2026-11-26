@@ -28,6 +28,7 @@ Paths are configured in `pipeline_config.py` (`DATA_GRID_DIR`, `STORAGE_DIR`,
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import gc
 import os
 import platform
 import random
@@ -209,6 +210,9 @@ def _batch_worker(task):
             except OSError:
                 pass
         return ("failed", grid_id, raw_stem, 0.0, traceback.format_exc())
+    finally:
+        # Reclaim pandas/pandapower objects promptly across long multi-hundred-grid worker runs
+        gc.collect()
 
 
 def run_batch_manifest(manifest_path, start_line, end_line, n_workers, input_dir, output_dir, overwrite=False):
