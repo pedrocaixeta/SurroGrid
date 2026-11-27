@@ -28,6 +28,7 @@ Paths are configured in `pipeline_config.py` (`DATA_GRID_DIR`, `STORAGE_DIR`,
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import errno
 import gc
 import os
 import platform
@@ -179,6 +180,24 @@ def run_single_grid(
     return final_path, time.perf_counter() - t_start
 
 
+def _is_storage_full_error(exc, tb_str=""):
+    """Return True if `exc` (or its chain / traceback) indicates disk quota or space exhaustion."""
+    seen = set()
+    cur = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if isinstance(cur, OSError) and getattr(cur, "errno", None) in (errno.EDQUOT, errno.ENOSPC):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    tb_lower = tb_str.lower()
+    return (
+        "disk quota exceeded" in tb_lower
+        or "no space left on device" in tb_lower
+        or "[errno 122]" in tb_lower
+        or "[errno 28]" in tb_lower
+    )
+
+
 def _batch_worker(task):
     """Top-level worker function for grid-level multiprocessing in batch mode."""
     grid_id, raw_stem, input_dir, output_dir, overwrite = task
@@ -201,7 +220,7 @@ def _batch_worker(task):
             verbose=False,
         )
         return ("ok", grid_id, raw_stem, elapsed, "")
-    except Exception:
+    except Exception as exc:
         # Remove any incomplete working copy so re-runs start cleanly (never touch *_DmdAllocated.h5)
         partial_path = os.path.join(output_dir, f"{raw_stem}.h5")
         if os.path.isfile(partial_path):
@@ -209,7 +228,9 @@ def _batch_worker(task):
                 os.remove(partial_path)
             except OSError:
                 pass
-        return ("failed", grid_id, raw_stem, 0.0, traceback.format_exc())
+        tb_str = traceback.format_exc()
+        status = "fatal" if _is_storage_full_error(exc, tb_str) else "failed"
+        return (status, grid_id, raw_stem, 0.0, tb_str)
     finally:
         # Reclaim pandas/pandapower objects promptly across long multi-hundred-grid worker runs
         gc.collect()
@@ -252,9 +273,12 @@ def run_batch_manifest(manifest_path, start_line, end_line, n_workers, input_dir
     succeeded = 0
     skipped = 0
     failed_ids = []
+    fatal_abort = False
+    cancelled = 0
 
     if n_workers > 1:
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        executor = ProcessPoolExecutor(max_workers=n_workers)
+        try:
             futures = [executor.submit(_batch_worker, task) for task in entries]
             for done_idx, fut in enumerate(as_completed(futures), start=1):
                 status, grid_id, raw_stem, elapsed, err_tb = fut.result()
@@ -264,10 +288,25 @@ def run_batch_manifest(manifest_path, start_line, end_line, n_workers, input_dir
                 elif status == "skipped":
                     skipped += 1
                     print(f"  [{done_idx}/{total}] SKIPPED {raw_stem}", flush=True)
+                elif status == "fatal":
+                    failed_ids.append(grid_id)
+                    fatal_abort = True
+                    print(f"  [{done_idx}/{total}] FATAL   {raw_stem} (ID {grid_id})", file=sys.stderr)
+                    print(err_tb, file=sys.stderr, flush=True)
+                    cancelled = sum(1 for f in futures if f.cancel())
+                    print(
+                        f"FATAL: Storage limit reached (EDQUOT/ENOSPC). Aborting batch early "
+                        f"(cancelled {cancelled} queued grid(s); waiting for active workers to clean up).",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    break
                 else:
                     failed_ids.append(grid_id)
                     print(f"  [{done_idx}/{total}] FAILED  {raw_stem} (ID {grid_id})", file=sys.stderr)
                     print(err_tb, file=sys.stderr, flush=True)
+        finally:
+            executor.shutdown(wait=True, cancel_futures=fatal_abort)
     else:
         for done_idx, task in enumerate(entries, start=1):
             status, grid_id, raw_stem, elapsed, err_tb = _batch_worker(task)
@@ -277,17 +316,34 @@ def run_batch_manifest(manifest_path, start_line, end_line, n_workers, input_dir
             elif status == "skipped":
                 skipped += 1
                 print(f"  [{done_idx}/{total}] SKIPPED {raw_stem}", flush=True)
+            elif status == "fatal":
+                failed_ids.append(grid_id)
+                fatal_abort = True
+                cancelled = total - done_idx
+                print(f"  [{done_idx}/{total}] FATAL   {raw_stem} (ID {grid_id})", file=sys.stderr)
+                print(err_tb, file=sys.stderr, flush=True)
+                print(
+                    f"FATAL: Storage limit reached (EDQUOT/ENOSPC). Aborting batch early "
+                    f"(skipped {cancelled} remaining grid(s)).",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                break
             else:
                 failed_ids.append(grid_id)
                 print(f"  [{done_idx}/{total}] FAILED  {raw_stem} (ID {grid_id})", file=sys.stderr)
                 print(err_tb, file=sys.stderr, flush=True)
 
     wall = time.perf_counter() - t0
+    cancel_note = f", cancelled={cancelled}" if fatal_abort else ""
     print(
-        f"Batch summary: succeeded={succeeded}, skipped={skipped}, failed={len(failed_ids)} "
+        f"Batch summary: succeeded={succeeded}, skipped={skipped}, failed={len(failed_ids)}{cancel_note} "
         f"| wall={wall:.1f}s ({wall / max(1, succeeded):.2f}s/grid)",
         flush=True,
     )
+    if fatal_abort:
+        print(f"Aborted on Grid IDs: {' '.join(failed_ids)}", file=sys.stderr, flush=True)
+        return 2
     if failed_ids:
         print(f"Failed Grid IDs: {' '.join(failed_ids)}", file=sys.stderr, flush=True)
         return 1

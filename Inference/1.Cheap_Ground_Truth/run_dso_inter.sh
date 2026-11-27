@@ -60,6 +60,9 @@ GRIDS_PER_TASK="${GRIDS_PER_TASK:-}"
 MAX_GRIDS="${MAX_GRIDS:-0}"                    # 0 = all pending grids; >0 = cap for testing
 PART_SPEC="${PART_SPEC:-1/1}"                  # Split matched grids into N parts, run part K (e.g. 1/2)
 OVERWRITE="${OVERWRITE:-0}"                    # 0 = skip already done; 1 = re-run all
+EST_MB_PER_GRID="${EST_MB_PER_GRID:-0}"        # 0 = auto-estimate from existing outputs (fallback: 25 MiB/grid)
+CLEAN_PARTIALS="${CLEAN_PARTIALS:-0}"          # 1 = delete leftover partial .h5 files in OUTPUT_DIR before launch
+SKIP_STORAGE_CHECK="${SKIP_STORAGE_CHECK:-0}"  # 1 = bypass pre-flight storage space abort
 
 # Resolve script directory (handles both direct invocation and SLURM spool copies)
 if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then
@@ -198,6 +201,9 @@ Options:
   --qos NAME                 Override SLURM QoS (empty string omits --qos)
   --input-dir PATH           Override RAW_GRID_DIR
   --output-dir PATH          Override OUTPUT_DIR
+  --est-mb-per-grid MB       Estimated MiB per completed grid for storage check (0 = auto)
+  --clean-partials           Remove leftover partial .h5 files in OUTPUT_DIR before submitting
+  --skip-storage-check       Warn instead of aborting if estimated output exceeds free space
   -h, --help                 Show this help message
 EOF
 }
@@ -240,6 +246,12 @@ while [ "$#" -gt 0 ]; do
       RAW_GRID_DIR="$2"; shift 2 ;;
     --output-dir)
       OUTPUT_DIR="$2"; shift 2 ;;
+    --est-mb-per-grid)
+      EST_MB_PER_GRID="$2"; shift 2 ;;
+    --clean-partials)
+      CLEAN_PARTIALS=1; shift ;;
+    --skip-storage-check)
+      SKIP_STORAGE_CHECK=1; shift ;;
     -h|--help)
       usage; exit 0 ;;
     -*)
@@ -316,29 +328,58 @@ if [ "$MAX_TASKS" -lt 1 ] || [ "$GRIDS_PER_TASK" -lt 1 ]; then
 fi
 MAX_GRIDS_PER_SUBMIT=$(( MAX_TASKS * GRIDS_PER_TASK ))
 
-# Scan RAW_GRID_DIR & OUTPUT_DIR via Python os.scandir (fast on DSS), sort smallest .h5 first
+SITE_DATA_FILE="${SCRIPT_DIR}/gridalloc/data/statistics/general/site_data.txt"
+
+# Scan RAW_GRID_DIR & OUTPUT_DIR via Python os.scandir (fast on DSS), sort smallest .h5 first,
+# and run pre-flight checks (storage space, leftover partial .h5 files, and site_data.txt PLZ coverage).
 SCAN_STATS=$(PYTHONDONTWRITEBYTECODE=1 python3 - \
   "$RAW_GRID_DIR" "$OUTPUT_DIR" "$DSO_SHORT" "$OUTPUT_SUFFIX" \
-  "$PART_IDX" "$PART_TOTAL" "$MAX_GRIDS" "$MAX_GRIDS_PER_SUBMIT" "$OVERWRITE" "$MANIFEST_FILE" "$DRY_RUN" <<'PYEOF'
-import math, os, sys
+  "$PART_IDX" "$PART_TOTAL" "$MAX_GRIDS" "$MAX_GRIDS_PER_SUBMIT" "$OVERWRITE" \
+  "$MANIFEST_FILE" "$DRY_RUN" "$EST_MB_PER_GRID" "$CLEAN_PARTIALS" "$SITE_DATA_FILE" <<'PYEOF'
+import math, os, shutil, sys
 
 (
     raw_dir, out_dir, dso_short, out_suffix,
-    part_idx, part_total, max_grids, max_grids_per_submit, overwrite, manifest_path, dry_run
+    part_idx, part_total, max_grids, max_grids_per_submit, overwrite,
+    manifest_path, dry_run, est_mb_override, clean_partials, site_data_file
 ) = (
     sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4],
     int(sys.argv[5]), int(sys.argv[6]), int(sys.argv[7]), int(sys.argv[8]),
-    int(sys.argv[9]), sys.argv[10], int(sys.argv[11])
+    int(sys.argv[9]), sys.argv[10], int(sys.argv[11]), float(sys.argv[12]),
+    int(sys.argv[13]), sys.argv[14]
 )
 
 exclude_suffixes = ("_DmdAllocated.h5", "_Features.h5", "_Predicted.h5", "_direc_Inferred.h5", "_pwrflw.h5")
+target_suffix = f"{out_suffix}.h5"
 
 done_files = set()
-if not overwrite and os.path.isdir(out_dir):
+partial_files = []
+sampled_out_sizes = []
+if os.path.isdir(out_dir):
     with os.scandir(out_dir) as it:
         for entry in it:
-            if entry.name.endswith(f"{out_suffix}.h5"):
-                done_files.add(entry.name)
+            name = entry.name
+            if not name.endswith(".h5"):
+                continue
+            if name.endswith(target_suffix):
+                if not overwrite:
+                    done_files.add(name)
+                if est_mb_override <= 0 and len(sampled_out_sizes) < 200:
+                    try:
+                        sampled_out_sizes.append(entry.stat().st_size)
+                    except OSError:
+                        pass
+            elif not name.endswith(exclude_suffixes):
+                partial_files.append(name)
+
+partial_removed = 0
+if clean_partials and partial_files and not dry_run:
+    for pname in partial_files:
+        try:
+            os.remove(os.path.join(out_dir, pname))
+            partial_removed += 1
+        except OSError:
+            pass
 
 # Scan raw grids matching DSO_SHORT (`ALL`, single DSO, or comma-separated DSOs), recording file size
 dso_filter = None if dso_short.upper() == "ALL" else {s.strip() for s in dso_short.split(",") if s.strip()}
@@ -379,17 +420,91 @@ total_pending = len(pending_all)
 wave_pending = pending_all[:max_grids_per_submit]
 remaining_after_wave = total_pending - len(wave_pending)
 
+# Storage estimate & available disk/quota space on OUTPUT_DIR (or nearest existing parent)
+if est_mb_override > 0:
+    est_mb = est_mb_override
+    est_src = "override"
+elif len(sampled_out_sizes) >= 10:
+    est_mb = (sum(sampled_out_sizes) / len(sampled_out_sizes)) / (1024.0 * 1024.0)
+    est_src = f"avg of {len(sampled_out_sizes)} existing outputs"
+else:
+    est_mb = 25.0
+    est_src = "default"
+
+est_bytes = int(len(wave_pending) * est_mb * 1024.0 * 1024.0)
+probe_dir = out_dir
+while probe_dir and not os.path.exists(probe_dir):
+    parent = os.path.dirname(probe_dir)
+    if parent == probe_dir:
+        break
+    probe_dir = parent
+try:
+    avail_bytes = shutil.disk_usage(probe_dir).free
+except OSError:
+    avail_bytes = -1
+
+# Pre-flight PLZ coverage check against site_data.txt
+missing_plzs = {}
+if os.path.isfile(site_data_file) and wave_pending:
+    known_plzs = set()
+    with open(site_data_file, "r", encoding="utf-8", errors="ignore") as sf:
+        header = sf.readline()
+        for line in sf:
+            line = line.strip()
+            if not line:
+                continue
+            known_plzs.add(line.split("\t", 1)[0].strip().zfill(5))
+    for _, stem in wave_pending:
+        parts = stem.split("_")
+        # Filename format: <id>_<dso>_<coords>_<plz>_<kcid>_<bcid>
+        if len(parts) >= 4 and len(parts[3]) == 5 and parts[3].isdigit():
+            plz = parts[3]
+            if plz not in known_plzs:
+                missing_plzs[plz] = missing_plzs.get(plz, 0) + 1
+
 if not dry_run and wave_pending:
     with open(manifest_path, "w", encoding="utf-8") as f:
         for gid, stem in wave_pending:
             f.write(f"{gid}\t{stem}\n")
 
-preview = ",".join(gid for gid, _ in wave_pending[:10])
-print(f"{total_dso} {len(part_slice)} {already_done} {total_pending} {len(wave_pending)} {remaining_after_wave} {preview}")
+preview = ",".join(gid for gid, _ in wave_pending[:10]) or "none"
+partial_sample = ",".join(sorted(partial_files)[:5]) or "none"
+missing_plz_count = sum(missing_plzs.values())
+missing_plz_list = ",".join(f"{k}({v})" for k, v in sorted(missing_plzs.items())[:10]) or "none"
+
+print("\t".join([
+    str(total_dso),
+    str(len(part_slice)),
+    str(already_done),
+    str(total_pending),
+    str(len(wave_pending)),
+    str(remaining_after_wave),
+    preview,
+    str(len(partial_files)),
+    str(partial_removed),
+    partial_sample,
+    f"{est_mb:.1f}",
+    est_src,
+    str(est_bytes),
+    str(avail_bytes),
+    str(missing_plz_count),
+    missing_plz_list,
+]))
 PYEOF
 )
 
-read -r TOTAL_DSO PART_MATCHED ALREADY_DONE TOTAL_PENDING WAVE_COUNT REMAINING_AFTER_WAVE PREVIEW_IDS <<< "$SCAN_STATS"
+IFS=$'\t' read -r \
+  TOTAL_DSO PART_MATCHED ALREADY_DONE TOTAL_PENDING WAVE_COUNT REMAINING_AFTER_WAVE PREVIEW_IDS \
+  PARTIAL_COUNT PARTIAL_REMOVED PARTIAL_SAMPLE EST_MB_USED EST_MB_SRC EST_BYTES AVAIL_BYTES \
+  MISSING_PLZ_GRIDS MISSING_PLZ_LIST <<< "$SCAN_STATS"
+
+EST_GIB=$(awk -v b="$EST_BYTES" 'BEGIN { printf "%.2f", b / 1073741824 }')
+if [ "$AVAIL_BYTES" -ge 0 ]; then
+  AVAIL_GIB=$(awk -v b="$AVAIL_BYTES" 'BEGIN { printf "%.2f", b / 1073741824 }')
+  AVAIL_DISPLAY="${AVAIL_GIB} GiB"
+else
+  AVAIL_DISPLAY="unknown"
+fi
 
 echo "========================================================================"
 echo "Step 1 (Cheap Ground Truth) DSO Array Launcher"
@@ -405,11 +520,43 @@ echo "  This wave       : $WAVE_COUNT (cap: ${MAX_TASKS} tasks x ${GRIDS_PER_TAS
 if [ "$REMAINING_AFTER_WAVE" -gt 0 ]; then
   echo "  Remaining later : $REMAINING_AFTER_WAVE (re-run this exact command after this wave finishes!)"
 fi
+echo "  Est. storage    : ~${EST_GIB} GiB (~${EST_MB_USED} MiB/grid, ${EST_MB_SRC}) | Free: ${AVAIL_DISPLAY}"
+if [ "$PARTIAL_COUNT" -gt 0 ]; then
+  if [ "$CLEAN_PARTIALS" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
+    echo "  Partial .h5     : Cleaned ${PARTIAL_REMOVED}/${PARTIAL_COUNT} leftover partial file(s)"
+  else
+    echo "  Partial .h5     : WARNING: ${PARTIAL_COUNT} leftover partial .h5 file(s) in OUTPUT_DIR (e.g. ${PARTIAL_SAMPLE})"
+    echo "                    Re-run with --clean-partials or run:"
+    echo "                    find \"${OUTPUT_DIR}\" -maxdepth 1 -name '*.h5' ! -name '*${OUTPUT_SUFFIX}.h5' -delete"
+  fi
+else
+  echo "  Partial .h5     : none"
+fi
+if [ "$MISSING_PLZ_GRIDS" -gt 0 ]; then
+  echo "  Missing PLZs    : WARNING: ${MISSING_PLZ_GRIDS} grid(s) use PLZ(s) absent from site_data.txt: ${MISSING_PLZ_LIST}"
+else
+  echo "  Missing PLZs    : none (all wave PLZs present in site_data.txt)"
+fi
 echo "========================================================================"
 
 if [ "$WAVE_COUNT" -eq 0 ]; then
   echo "Nothing to submit for DSO '$DSO_SHORT' (part ${PART_SPEC})."
   exit 0
+fi
+
+# Pre-flight storage check: abort submission if estimated output exceeds available space
+if [ "$AVAIL_BYTES" -ge 0 ] && [ "$EST_BYTES" -gt "$AVAIL_BYTES" ]; then
+  if [ "$DRY_RUN" -eq 1 ] || [ "$SKIP_STORAGE_CHECK" -eq 1 ]; then
+    echo "WARNING: Estimated storage (~${EST_GIB} GiB) exceeds available space (${AVAIL_GIB} GiB) on OUTPUT_DIR!" >&2
+  else
+    rm -f "$MANIFEST_FILE"
+    echo "ERROR: Estimated storage (~${EST_GIB} GiB for ${WAVE_COUNT} grids @ ${EST_MB_USED} MiB/grid)" >&2
+    echo "       exceeds available space (${AVAIL_GIB} GiB) on ${OUTPUT_DIR}." >&2
+    echo "       Free disk space, lower --limit / --grids-per-task, override --est-mb-per-grid, or pass --skip-storage-check." >&2
+    exit 1
+  fi
+elif [ "$AVAIL_BYTES" -gt 0 ] && awk -v e="$EST_BYTES" -v a="$AVAIL_BYTES" 'BEGIN { exit !(e > 0.85 * a) }'; then
+  echo "WARNING: Estimated storage (~${EST_GIB} GiB) uses >85% of available space (${AVAIL_GIB} GiB) on OUTPUT_DIR." >&2
 fi
 
 # Compute array task count and walltime per task (D-HH:MM:SS)
